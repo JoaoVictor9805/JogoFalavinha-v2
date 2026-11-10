@@ -1,0 +1,17 @@
+{
+  "name": "jogofalavinha-v2-backend",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Backend Node.js estruturado para o Escape Room Virtual Falavinha v2 (em espera para próxima etapa).",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}
+

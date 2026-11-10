@@ -1,0 +1,584 @@
+{
+  "schemaVersion": "2.0",
+  "versao": "2.0.0",
+  "jogo": {
+    "id": "escape-room-falavinha-next",
+    "titulo": "Escape Room Virtual Falavinha",
+    "subtitulo": "Desafio Next — Edição v2",
+    "descricao": "Dinâmica interativa de final de ano focada em comunicação com o cliente, cultura Falavinha e resolução de problemas.",
+    "totalEtapas": 7,
+    "regras": {
+      "cronometroContinuo": true,
+      "tentativasIlimitadas": true,
+      "exibirDicas": false,
+      "salvarProgresso": true,
+      "revelarRespostaAoErrar": false,
+      "pontuacaoPorEquipe": true,
+      "resumoRegras": [
+        "Cronômetro contínuo em tempo real do início ao fim",
+        "Tentativas ilimitadas sem botão de dicas em tela",
+        "Progresso salvo automaticamente para retomar quando precisar",
+        "Classificação individual (Geral) e por Setor/Departamento"
+      ]
+    },
+    "labirinto": {
+      "avatarNome": "Johnny",
+      "destinoLabel": "Porta do Cliente",
+      "mensagemInicial": "Johnny aguarda seus acertos para avançar pelo percurso até a porta do cliente."
+    },
+    "cadastro": {
+      "titulo": "Identificação do Participante",
+      "subtitulo": "Preencha seus dados corporativos para registrar seu tempo no ranking geral e da sua equipe.",
+      "textoBotaoIniciar": "Iniciar Desafio",
+      "textoBotaoRetomar": "Retomar Partida Salva",
+      "campos": [
+        {
+          "id": "nome",
+          "label": "Nome Completo",
+          "tipo": "text",
+          "obrigatorio": true,
+          "placeholder": "Digite seu nome completo",
+          "validacao": {
+            "minCaracteres": 2
+          }
+        },
+        {
+          "id": "email",
+          "label": "E-mail Corporativo",
+          "tipo": "email",
+          "obrigatorio": true,
+          "placeholder": "seu.nome@falavinha.com.br"
+        },
+        {
+          "id": "unidade",
+          "label": "Unidade Falavinha",
+          "tipo": "select",
+          "obrigatorio": true,
+          "opcoes": [
+            "Curitiba - Matriz",
+            "Londrina",
+            "Maringá",
+            "Ponta Grossa",
+            "Cascavel",
+            "Remoto / Outra"
+          ]
+        },
+        {
+          "id": "setor",
+          "label": "Setor / Departamento",
+          "tipo": "select",
+          "obrigatorio": true,
+          "opcoes": [
+            "Tributário",
+            "Contábil",
+            "Financeiro",
+            "Recursos Humanos",
+            "TI / Inovação",
+            "Comercial / Vendas",
+            "Operações / Suporte",
+            "Diretoria / Gestão"
+          ]
+        }
+      ]
+    },
+    "conclusao": {
+      "titulo": "Escape Room Concluído!",
+      "subtitulo": "Parabéns! Você superou todos os desafios e levou o Johnny até a porta do cliente.",
+      "textoBotaoRanking": "Ver Ranking Completo",
+      "textoBotaoJogarNovamente": "Jogar Novamente"
+    }
+  },
+  "etapas": [
+    {
+      "id": 1,
+      "codigo": "desafio-01",
+      "ordem": 1,
+      "faseLabel": "Desafio 1",
+      "titulo": "Encaminhamento Estratégico",
+      "categoria": "Tributário",
+      "eixoTematico": "Estrutura Organizacional",
+      "tipo": "multipla_escolha",
+      "subtipo": "questao_conceitual",
+      "origem": {
+        "documento": "ESCAPE ROOM.docx",
+        "referencia": "DESAFIO 1 – QUESTÃO"
+      },
+      "exibicao": {
+        "icone": "phone-call",
+        "temaCor": "teal",
+        "mostrarNumeroFase": true,
+        "mostrarCategoria": true,
+        "embaralharOpcoes": false,
+        "layoutOpcoes": "lista"
+      },
+      "conteudo": {
+        "cenario": null,
+        "pergunta": "Um cliente ligou buscando novas estratégias para pagar menos impostos. Para qual departamento você encaminha?",
+        "instrucao": "Selecione a alternativa correta para avançar.",
+        "input": null
+      },
+      "opcoes": [
+        {
+          "id": "tributario",
+          "texto": "Tributário"
+        },
+        {
+          "id": "contabil",
+          "texto": "Contábil"
+        },
+        {
+          "id": "financeiro",
+          "texto": "Financeiro"
+        }
+      ],
+      "validacao": {
+        "modo": "opcao_id",
+        "respostaCorretaId": "tributario",
+        "respostasAceitas": ["tributario", "Tributário"],
+        "normalizacao": {
+          "trim": true,
+          "ignorarMaiusculas": true,
+          "ignorarAcentos": true,
+          "ignorarPontuacao": false
+        },
+        "tentativasIlimitadas": true,
+        "permitirDica": false
+      },
+      "feedback": {
+        "acerto": {
+          "titulo": "Resposta exata!",
+          "mensagem": "Estratégias de economia tributária são conduzidas pelo departamento Tributário."
+        },
+        "erro": {
+          "titulo": "Resposta incorreta",
+          "mensagem": "Não foi dessa vez! O cronômetro segue rodando — analise as opções e tente novamente."
+        }
+      },
+      "progressoLabirinto": {
+        "checkpointLabel": "Triagem",
+        "mensagemAvanco": "Johnny passou pela recepção e avançou na primeira porta!"
+      }
+    },
+    {
+      "id": 2,
+      "codigo": "desafio-02",
+      "ordem": 2,
+      "faseLabel": "Desafio 2",
+      "titulo": "Padrão de Atendimento Telefônico",
+      "categoria": "Comunicação",
+      "eixoTematico": "Comunicação com o Cliente",
+      "tipo": "multipla_escolha",
+      "subtipo": "questao_conceitual",
+      "origem": {
+        "documento": "ESCAPE ROOM.docx",
+        "referencia": "DESAFIO 2 - QUESTÃO"
+      },
+      "exibicao": {
+        "icone": "headset",
+        "temaCor": "cyan",
+        "mostrarNumeroFase": true,
+        "mostrarCategoria": true,
+        "embaralharOpcoes": false,
+        "layoutOpcoes": "lista"
+      },
+      "conteudo": {
+        "cenario": null,
+        "pergunta": "Quando atendemos o telefone, como um colaborador Falavinha Next deve responder?",
+        "instrucao": "Escolha a saudação padrão oficial da Falavinha Next.",
+        "input": null
+      },
+      "opcoes": [
+        {
+          "id": "boa_tarde",
+          "texto": "Boa tarde! Como posso ajudar?"
+        },
+        {
+          "id": "alo_quem_fala",
+          "texto": "Alô, quem fala?"
+        },
+        {
+          "id": "padrao_falavinha_next",
+          "texto": "Falavinha Next, bom dia/tarde, (seu nome)"
+        }
+      ],
+      "validacao": {
+        "modo": "opcao_id",
+        "respostaCorretaId": "padrao_falavinha_next",
+        "respostasAceitas": [
+          "padrao_falavinha_next",
+          "Falavinha Next, bom dia/tarde, (seu nome)"
+        ],
+        "normalizacao": {
+          "trim": true,
+          "ignorarMaiusculas": true,
+          "ignorarAcentos": true,
+          "ignorarPontuacao": false
+        },
+        "tentativasIlimitadas": true,
+        "permitirDica": false
+      },
+      "feedback": {
+        "acerto": {
+          "titulo": "Atendimento nota 10!",
+          "mensagem": "Identificar a Falavinha Next e seu nome logo na saudação gera clareza e profissionalismo."
+        },
+        "erro": {
+          "titulo": "Resposta incorreta",
+          "mensagem": "Ainda não é o padrão ideal. O tempo continua correndo — tente novamente."
+        }
+      },
+      "progressoLabirinto": {
+        "checkpointLabel": "Atendimento",
+        "mensagemAvanco": "Linha liberada! Johnny avançou pelo corredor central."
+      }
+    },
+    {
+      "id": 3,
+      "codigo": "desafio-03",
+      "ordem": 3,
+      "faseLabel": "Desafio 3",
+      "titulo": "Quem Sou Eu?",
+      "categoria": "Charada Corporativa",
+      "eixoTematico": "Cultura Interna",
+      "tipo": "texto_curto",
+      "subtipo": "quem_sou_eu",
+      "origem": {
+        "documento": "ESCAPE ROOM.docx",
+        "referencia": "DESAFIO 3 – QUEM SOU EU?"
+      },
+      "exibicao": {
+        "icone": "sparkles",
+        "temaCor": "amber",
+        "mostrarNumeroFase": true,
+        "mostrarCategoria": true,
+        "embaralharOpcoes": false,
+        "layoutOpcoes": null
+      },
+      "conteudo": {
+        "cenario": "Minha voz chega antes de mim, mas ultimamente meus passos estão demorando um pouquinho mais! Se o assunto é dinheiro, pode me chamar! Faço as contas, confiro os números e não deixo nenhum centavo escapar.",
+        "pergunta": "Quem sou eu?",
+        "instrucao": "Digite o nome que responde à charada e confirme sua resposta.",
+        "input": {
+          "tipoHtml": "text",
+          "inputMode": "text",
+          "placeholder": "Digite o nome do personagem...",
+          "rotuloBotao": "Confirmar resposta",
+          "maxCaracteres": 40,
+          "somenteNumeros": false,
+          "transformarMaiusculas": false,
+          "autoCompletar": "off"
+        }
+      },
+      "opcoes": null,
+      "validacao": {
+        "modo": "texto_normalizado",
+        "respostaPrincipal": "Flavyo",
+        "respostasAceitas": ["Flavyo"],
+        "normalizacao": {
+          "trim": true,
+          "ignorarMaiusculas": true,
+          "ignorarAcentos": true,
+          "ignorarPontuacao": true
+        },
+        "tentativasIlimitadas": true,
+        "permitirDica": false
+      },
+      "feedback": {
+        "acerto": {
+          "titulo": "Charada decifrada!",
+          "mensagem": "É o Flavyo! Nenhum centavo escapa dessa etapa."
+        },
+        "erro": {
+          "titulo": "Não é esse nome",
+          "mensagem": "Resposta incorreta. Releia cada trecho da charada com atenção e tente novamente."
+        }
+      },
+      "progressoLabirinto": {
+        "checkpointLabel": "Charada",
+        "mensagemAvanco": "Enigma superado! Johnny desbloqueou a ala financeira."
+      }
+    },
+    {
+      "id": 4,
+      "codigo": "desafio-04",
+      "ordem": 4,
+      "faseLabel": "Desafio 4",
+      "titulo": "Condução de Cliente Irritado",
+      "categoria": "Atendimento & PEAH",
+      "eixoTematico": "Resolução de Problemas",
+      "tipo": "multipla_escolha",
+      "subtipo": "questao_conceitual",
+      "origem": {
+        "documento": "ESCAPE ROOM.docx",
+        "referencia": "DESAFIO 4 - QUESTÃO"
+      },
+      "exibicao": {
+        "icone": "message-square-heart",
+        "temaCor": "teal",
+        "mostrarNumeroFase": true,
+        "mostrarCategoria": true,
+        "embaralharOpcoes": false,
+        "layoutOpcoes": "lista"
+      },
+      "conteudo": {
+        "cenario": "Um cliente liga irritado, certo de que a empresa cometeu um erro. Ao verificar, você percebe que ele preencheu uma informação incorretamente. Isso já aconteceu com outros clientes. Na equipe alguém comenta: “Já explicamos, o cliente é que não presta atenção”.",
+        "pergunta": "Como você conduziria esse atendimento?",
+        "instrucao": "Selecione a condução alinhada às boas práticas de relacionamento com o cliente.",
+        "input": null
+      },
+      "opcoes": [
+        {
+          "id": "explica_com_calma_primeiro",
+          "texto": "Explica com calma onde ocorreu o erro, para evitar que ele continue preocupado"
+        },
+        {
+          "id": "escuta_ativa_depois_explica",
+          "texto": "Deixa que ele fale, procura compreender o incômodo e só depois explica o que aconteceu"
+        },
+        {
+          "id": "direto_para_solucao",
+          "texto": "Vai direto para a solução: independente de quem errou, procura ajudar"
+        }
+      ],
+      "validacao": {
+        "modo": "opcao_id",
+        "respostaCorretaId": "escuta_ativa_depois_explica",
+        "respostasAceitas": [
+          "escuta_ativa_depois_explica",
+          "Deixa que ele fale, procura compreender o incômodo e só depois explica o que aconteceu"
+        ],
+        "normalizacao": {
+          "trim": true,
+          "ignorarMaiusculas": true,
+          "ignorarAcentos": true,
+          "ignorarPontuacao": false
+        },
+        "tentativasIlimitadas": true,
+        "permitirDica": false
+      },
+      "feedback": {
+        "acerto": {
+          "titulo": "Escuta ativa aplicada!",
+          "mensagem": "Ouvir e validar o incômodo antes de explicar reduz o atrito e abre caminho para a solução."
+        },
+        "erro": {
+          "titulo": "Resposta incorreta",
+          "mensagem": "Não foi dessa vez! Avalie qual postura acolhe melhor o cliente antes da explicação."
+        }
+      },
+      "progressoLabirinto": {
+        "checkpointLabel": "Empatia",
+        "mensagemAvanco": "Metade do caminho vencida! Johnny segue firme no percurso."
+      }
+    },
+    {
+      "id": 5,
+      "codigo": "desafio-05",
+      "ordem": 5,
+      "faseLabel": "Desafio 5",
+      "titulo": "Documento Protegido por Senha",
+      "categoria": "Acesso Restrito",
+      "eixoTematico": "Conexão Next & História",
+      "tipo": "senha",
+      "subtipo": "desbloqueio_documento",
+      "origem": {
+        "documento": "ESCAPE ROOM.docx",
+        "referencia": "DESAFIO 5 – SENHA",
+        "referenciaComplementar": "Levantamento de Requisitos (seção 3.4 - Conexão Next)"
+      },
+      "exibicao": {
+        "icone": "lock-keyhole",
+        "temaCor": "amber",
+        "mostrarNumeroFase": true,
+        "mostrarCategoria": true,
+        "embaralharOpcoes": false,
+        "layoutOpcoes": null
+      },
+      "conteudo": {
+        "cenario": "Você recebeu o documento do cliente para avançar no caso, porém o arquivo está criptografado e exige a senha secreta divulgada na dinâmica.",
+        "pergunta": "Insira a senha para abrir o documento do cliente.",
+        "instrucao": "Digite o código numérico de 4 dígitos para desbloquear o arquivo.",
+        "referenciaOriginal": "Pedir para colocar uma senha para abrir o documento de um cliente",
+        "input": {
+          "tipoHtml": "text",
+          "inputMode": "numeric",
+          "placeholder": "Digite a senha de 4 dígitos...",
+          "rotuloBotao": "Desbloquear documento",
+          "maxCaracteres": 4,
+          "somenteNumeros": true,
+          "transformarMaiusculas": false,
+          "autoCompletar": "off"
+        }
+      },
+      "opcoes": null,
+      "validacao": {
+        "modo": "texto_normalizado",
+        "respostaPrincipal": "1977",
+        "respostasAceitas": ["1977", "1976"],
+        "observacao": "O arquivo ESCAPE ROOM.docx define 1977; o Levantamento de Requisitos cita 1976 na seção 3.4, portanto ambos os anos são aceitos.",
+        "normalizacao": {
+          "trim": true,
+          "ignorarMaiusculas": true,
+          "ignorarAcentos": true,
+          "ignorarPontuacao": true
+        },
+        "tentativasIlimitadas": true,
+        "permitirDica": false
+      },
+      "feedback": {
+        "acerto": {
+          "titulo": "Documento desbloqueado!",
+          "mensagem": "Senha aceita! Os arquivos do cliente estão liberados para a próxima etapa."
+        },
+        "erro": {
+          "titulo": "Senha inválida",
+          "mensagem": "Acesso negado! O cronômetro continua em execução — tente outro código."
+        }
+      },
+      "progressoLabirinto": {
+        "checkpointLabel": "Cofre",
+        "mensagemAvanco": "Trava numérica aberta! Johnny avançou pela sala de arquivos."
+      }
+    },
+    {
+      "id": 6,
+      "codigo": "desafio-06",
+      "ordem": 6,
+      "faseLabel": "Desafio 6",
+      "titulo": "Compromisso e Novo Prazo",
+      "categoria": "Compromisso & Prazos",
+      "eixoTematico": "Responsabilidade & Comunicação",
+      "tipo": "multipla_escolha",
+      "subtipo": "questao_conceitual",
+      "origem": {
+        "documento": "ESCAPE ROOM.docx",
+        "referencia": "DESAFIO 6 - QUESTÃO"
+      },
+      "exibicao": {
+        "icone": "clock-alert",
+        "temaCor": "cyan",
+        "mostrarNumeroFase": true,
+        "mostrarCategoria": true,
+        "embaralharOpcoes": false,
+        "layoutOpcoes": "lista"
+      },
+      "conteudo": {
+        "cenario": "Um cliente pede uma informação importante. Você responde “pode deixar comigo, amanhã eu te retorno”. No dia seguinte, você ainda não conseguiu a informação. A pessoa de quem você depende também não lhe respondeu. O dia está terminando. Na equipe, esse tipo de atraso é frequente. A explicação costuma ser: “a outra pessoa não respondeu”.",
+        "pergunta": "Como você age diante dessa situação?",
+        "instrucao": "Escolha a alternativa que demonstra responsabilidade com o combinado.",
+        "input": null
+      },
+      "opcoes": [
+        {
+          "id": "informa_que_nao_conseguiu",
+          "texto": "Entra em contato com o cliente, informa que ainda não conseguiu a informação e que continua acompanhando o assunto."
+        },
+        {
+          "id": "cobra_e_espera_sem_retornar",
+          "texto": "Cobra novamente a pessoa responsável e espera um pouco mais. Afinal, retornar sem ter nenhuma novidade pode gerar ainda mais ansiedade no cliente."
+        },
+        {
+          "id": "reconhece_e_combina_novo_prazo",
+          "texto": "Entra em contato, reconhece que havia prometido retornar naquele dia, informa que ainda não tem a resposta e combina com o cliente um novo prazo para o próximo retorno."
+        }
+      ],
+      "validacao": {
+        "modo": "opcao_id",
+        "respostaCorretaId": "reconhece_e_combina_novo_prazo",
+        "respostasAceitas": [
+          "reconhece_e_combina_novo_prazo",
+          "Entra em contato, reconhece que havia prometido retornar naquele dia, informa que ainda não tem a resposta e combina com o cliente um novo prazo para o próximo retorno."
+        ],
+        "normalizacao": {
+          "trim": true,
+          "ignorarMaiusculas": true,
+          "ignorarAcentos": true,
+          "ignorarPontuacao": false
+        },
+        "tentativasIlimitadas": true,
+        "permitirDica": false
+      },
+      "feedback": {
+        "acerto": {
+          "titulo": "Compromisso honrado!",
+          "mensagem": "Assumir o combinado, dar transparência e pactuar um novo prazo mantém a confiança do cliente."
+        },
+        "erro": {
+          "titulo": "Resposta incorreta",
+          "mensagem": "Ainda não é a postura mais completa. Releia as alternativas e tente novamente."
+        }
+      },
+      "progressoLabirinto": {
+        "checkpointLabel": "Prazo",
+        "mensagemAvanco": "Último corredor alcançado! Falta apenas o código final."
+      }
+    },
+    {
+      "id": 7,
+      "codigo": "desafio-07",
+      "ordem": 7,
+      "faseLabel": "Desafio 7",
+      "titulo": "Chave Final do PEAH",
+      "categoria": "Cultura Next & PEAH",
+      "eixoTematico": "Conexão Next",
+      "tipo": "codigo",
+      "subtipo": "codigo_secreto",
+      "origem": {
+        "documento": "ESCAPE ROOM.docx",
+        "referencia": "DESAFIO 7 – CÓDIGO"
+      },
+      "exibicao": {
+        "icone": "shield-check",
+        "temaCor": "emerald",
+        "mostrarNumeroFase": true,
+        "mostrarCategoria": true,
+        "embaralharOpcoes": false,
+        "layoutOpcoes": null
+      },
+      "conteudo": {
+        "cenario": "Você chegou diante da última trava antes da porta do cliente. Informe o código-chave trabalhado nas pílulas do PEAH.",
+        "pergunta": "Sigla chave do PEAH.",
+        "instrucao": "Digite a sigla para abrir a porta final e concluir o Escape Room.",
+        "input": {
+          "tipoHtml": "text",
+          "inputMode": "text",
+          "placeholder": "Digite a sigla (ex.: ABC)...",
+          "rotuloBotao": "Abrir porta final",
+          "maxCaracteres": 10,
+          "somenteNumeros": false,
+          "transformarMaiusculas": true,
+          "autoCompletar": "off"
+        }
+      },
+      "opcoes": null,
+      "validacao": {
+        "modo": "texto_normalizado",
+        "respostaPrincipal": "ECS",
+        "respostasAceitas": ["ECS"],
+        "normalizacao": {
+          "trim": true,
+          "ignorarMaiusculas": true,
+          "ignorarAcentos": true,
+          "ignorarPontuacao": true
+        },
+        "tentativasIlimitadas": true,
+        "permitirDica": false
+      },
+      "feedback": {
+        "acerto": {
+          "titulo": "Porta destravada!",
+          "mensagem": "Código ECS validado com sucesso! Você concluiu todos os desafios do Escape Room Falavinha."
+        },
+        "erro": {
+          "titulo": "Código incorreto",
+          "mensagem": "A trava não abriu. Revise o código do PEAH e tente novamente."
+        }
+      },
+      "progressoLabirinto": {
+        "checkpointLabel": "PEAH",
+        "mensagemAvanco": "Johnny cruzou a porta do cliente! Escape Room concluído!"
+      }
+    }
+  ]
+}
+
