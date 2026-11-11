@@ -8,7 +8,6 @@ function ArrivalTransition() {
   const [stageText, setStageText] = useState('Você caminha pelo corredor silencioso do 7º andar...')
 
   useEffect(() => {
-    // Dispara o gatilho sonoro de chegada + porta pesada fechando
     triggerDoorAudio()
 
     const t1 = setTimeout(() => {
@@ -26,26 +25,26 @@ function ArrivalTransition() {
   }, [finishArrivalTransition])
 
   return (
-    <div className="fixed inset-0 z-40 bg-black flex flex-col items-center justify-center p-6 text-center select-none transition-opacity duration-500">
-      <div className="max-w-lg w-full space-y-6">
-        {/* Ícone de Áudio / Porta Pesada */}
-        <div className="mx-auto w-20 h-20 rounded-full bg-slate-900/90 border border-slate-800 flex items-center justify-center text-teal-400 shadow-[0_0_50px_rgba(20,184,166,0.2)] animate-pulse">
-          <DoorClosed className="w-9 h-9" />
+    <div className="fixed inset-0 z-40 bg-[#F5F0E6] text-stone-900 flex flex-col items-center justify-center p-6 text-center select-none animate-overlay-enter">
+      <div className="max-w-xl w-full bg-[#FDFBF7] border-2 border-stone-900 border-t-4 border-t-[#D99B38] p-8 sm:p-10 shadow-[8px_8px_0px_#1C1917] space-y-6 animate-modal-pop">
+        <div className="mx-auto w-20 h-20 rounded-none bg-[#F5F0E6] border-2 border-[#D99B38] flex items-center justify-center text-[#B87D1E] shadow-[3px_3px_0px_#1C1917]">
+          <DoorClosed className="w-9 h-9 animate-vn-idle" />
         </div>
 
-        {/* Indicador do Gatilho de Áudio (Placeholder visual + Web Audio API ativo) */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs font-mono text-amber-400">
-          <Volume2 className="w-4 h-4 animate-bounce" />
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-none bg-[#F5F0E6] border border-stone-300 text-xs font-mono text-stone-700">
+          <Volume2 className="w-4 h-4 text-[#B87D1E] animate-bounce" />
           <span>[SFX: Passos no corredor + Porta pesada do Tribunal fechando]</span>
         </div>
 
-        <p className="text-lg sm:text-xl font-semibold text-slate-200 tracking-wide transition-all duration-500">
-          {stageText}
+        <p
+          key={stageText}
+          className="text-lg sm:text-xl font-bold text-stone-900 tracking-wide animate-screen-enter"
+        >
+          “{stageText}”
         </p>
 
-        {/* Barra sutil de progresso da transição */}
-        <div className="w-48 h-1 bg-slate-900 rounded-full overflow-hidden mx-auto">
-          <div className="h-full bg-teal-500 animate-pulse w-full" />
+        <div className="w-60 h-2 bg-[#EBE4D5] border border-stone-900 rounded-none overflow-hidden mx-auto">
+          <div className="h-full bg-[#D99B38] animate-arrival-fill" />
         </div>
       </div>
     </div>

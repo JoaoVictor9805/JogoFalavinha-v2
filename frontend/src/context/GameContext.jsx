@@ -53,12 +53,13 @@ export function GameProvider({ children }) {
   const [penaltySeconds, setPenaltySeconds] = useState(0)
   const [penaltyAlertKey, setPenaltyAlertKey] = useState(0)
 
-  // Estado dos 7 conselheiros e do Overlay Visual Novel
+  // Estado dos 7 conselheiros, Overlay Visual Novel e Modal do Labirinto 3D
   const [memberProgress, setMemberProgress] = useState(createInitialMemberProgress)
   const [activeMemberId, setActiveMemberId] = useState(null)
   const [vnFeedback, setVnFeedback] = useState('idle') // 'idle' | 'wrong' | 'approved'
   const [isLocked, setIsLocked] = useState(false)
   const [ceoBriefingDismissed, setCeoBriefingDismissed] = useState(false)
+  const [mazeModal, setMazeModal] = useState(null)
   const [rankingHistory, setRankingHistory] = useState(loadSavedRanking)
 
   // Refs para bloqueio imediato contra spam de cliques e leitura segura em timeouts
@@ -150,7 +151,8 @@ export function GameProvider({ children }) {
       setActiveMemberId(null)
       setVnFeedback('idle')
       setCeoBriefingDismissed(false)
-      setIsTimerRunning(true)
+      setMazeModal(null)
+      setIsTimerRunning(false)
       setScreen('COMIC_INTRO')
 
       registerTimeout(() => {
@@ -160,6 +162,38 @@ export function GameProvider({ children }) {
     },
     [clearAllTimeouts, registerTimeout]
   )
+
+  // Abre o modal 3D de apresentação após o CEO (Jhonny) explicar as regras
+  const openIntroMazeModal = useCallback(() => {
+    playSelectSound()
+    setMazeModal({ mode: 'intro', fromStep: 0, toStep: 0 })
+  }, [])
+
+  // Confirma "OK" no modal inicial do labirinto: fecha intro e inicia o cronômetro oficial
+  const confirmIntroMazeAndStart = useCallback(() => {
+    playSelectSound()
+    setMazeModal(null)
+    setCeoBriefingDismissed(true)
+    setIsTimerRunning(true)
+  }, [])
+
+  // Abre o modal do mapa manualmente pelo botão inferior direito
+  const openManualMazeModal = useCallback(() => {
+    playSelectSound()
+    const done = Object.values(stateSnapshotRef.current.memberProgress).filter((m) => m.completed).length
+    setMazeModal({ mode: 'manual', fromStep: done, toStep: done })
+  }, [])
+
+  // Fecha o modal de progresso/visualização e avança para o Ranking se for a 7ª aprovação
+  const closeMazeModal = useCallback(() => {
+    playSelectSound()
+    setMazeModal((current) => {
+      if (current?.mode === 'progress' && current?.isFinal) {
+        setScreen('FINAL_RANKING')
+      }
+      return null
+    })
+  }, [])
 
   // 2. Avançar da Comic Strip para a Transição Preta + Gatilho de Áudio
   const advanceFromComic = useCallback(() => {
@@ -214,6 +248,9 @@ export function GameProvider({ children }) {
         // Delay obrigatório de 2,5 segundos congelado para leitura do elogio
         registerTimeout(() => {
           const snapshot = stateSnapshotRef.current
+          const prevCompleted = Object.values(snapshot.memberProgress).filter(
+            (item) => item.completed
+          ).length
           const nextProgress = {
             ...snapshot.memberProgress,
             [member.id]: {
@@ -227,6 +264,8 @@ export function GameProvider({ children }) {
           setVnFeedback('idle')
 
           const allCompleted = COUNCIL_MEMBERS.every((m) => nextProgress[m.id]?.completed)
+          const nextCompleted = allCompleted ? COUNCIL_MEMBERS.length : prevCompleted + 1
+
           if (allCompleted) {
             setIsTimerRunning(false)
             playVictorySound()
@@ -262,7 +301,21 @@ export function GameProvider({ children }) {
               return updated
             })
 
-            setScreen('FINAL_RANKING')
+            setMazeModal({
+              mode: 'progress',
+              fromStep: prevCompleted,
+              toStep: nextCompleted,
+              memberName: member.name,
+              isFinal: true,
+            })
+          } else {
+            setMazeModal({
+              mode: 'progress',
+              fromStep: prevCompleted,
+              toStep: nextCompleted,
+              memberName: member.name,
+              isFinal: false,
+            })
           }
 
           lockRef.current = false
@@ -371,6 +424,7 @@ export function GameProvider({ children }) {
     setActiveMemberId(null)
     setVnFeedback('idle')
     setCeoBriefingDismissed(false)
+    setMazeModal(null)
     setScreen('REGISTRATION')
   }, [clearAllTimeouts])
 
@@ -391,8 +445,13 @@ export function GameProvider({ children }) {
       vnFeedback,
       isLocked,
       ceoBriefingDismissed,
+      mazeModal,
       rankingHistory,
       setCeoBriefingDismissed,
+      openIntroMazeModal,
+      confirmIntroMazeAndStart,
+      openManualMazeModal,
+      closeMazeModal,
       startGameFromRegistration,
       advanceFromComic,
       finishArrivalTransition,
@@ -418,7 +477,12 @@ export function GameProvider({ children }) {
       vnFeedback,
       isLocked,
       ceoBriefingDismissed,
+      mazeModal,
       rankingHistory,
+      openIntroMazeModal,
+      confirmIntroMazeAndStart,
+      openManualMazeModal,
+      closeMazeModal,
       startGameFromRegistration,
       advanceFromComic,
       finishArrivalTransition,

@@ -4,8 +4,8 @@
 @layer base {
   body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background-color: #020617;
-    color: #f8fafc;
+    background-color: #F5F0E6;
+    color: #1C1917;
     overflow-x: hidden;
   }
 
@@ -27,10 +27,159 @@
   to { width: 0%; }
 }
 
+@keyframes arrivalFill {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+@keyframes vnIdleBreathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.008); }
+}
+
+@keyframes vnTalkBob {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.015); }
+}
+
+@keyframes vnApproveNod {
+  0% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-7px) scale(1.035); }
+  100% { transform: translateY(0) scale(1.02); }
+}
+
+@keyframes vnCaretBlink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.15; }
+}
+
+@keyframes screenEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes overlayEnter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes portraitEnter {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes panelRise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modalPop {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes hudEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes mazeEnter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .animate-vn-shake {
   animation: vnShake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
+.animate-vn-idle {
+  animation: vnIdleBreathe 3.4s ease-in-out infinite;
+}
+
+.animate-vn-talk {
+  animation: vnTalkBob 0.28s ease-in-out infinite;
+}
+
+.animate-vn-approve {
+  animation: vnApproveNod 0.5s ease-out forwards;
+}
+
+.animate-vn-caret {
+  animation: vnCaretBlink 0.9s steps(2, start) infinite;
+}
+
 .animate-reading-bar {
   animation: progressShrink 2.5s linear forwards;
+}
+
+.animate-arrival-fill {
+  animation: arrivalFill 3.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.animate-screen-enter {
+  animation: screenEnter 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-overlay-enter {
+  animation: overlayEnter 0.22s ease-out both;
+}
+
+.animate-portrait-enter {
+  animation: portraitEnter 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-panel-rise {
+  animation: panelRise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-modal-pop {
+  animation: modalPop 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-hud-enter {
+  animation: hudEnter 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-maze-enter {
+  animation: mazeEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }

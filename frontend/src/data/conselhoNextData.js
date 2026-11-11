@@ -74,7 +74,7 @@ export const CEO_TRIBUNAL_BRIEFING = {
   name: 'CEO · Presidente do Conselho',
   title: 'Abertura da Sessão do Tribunal',
   message:
-    'Bem-vindo ao Conselho Next. Diante de você estão as 7 lideranças da empresa. Você tem liberdade para escolher e conversar com cada membro sem ordem específica — mas atenção: cada resposta errada adiciona +5 segundos de penalidade ao seu tempo. Conquiste as 7 aprovações para concluir seu exame!',
+    'Bem-vindo ao Conselho Next! Diante de você estão as 7 lideranças da empresa, e você pode escolhê-las em qualquer ordem. A cada resposta correta, o Johnny avança uma etapa pelo labirinto 3D rumo à sala do cliente — e você verá cada passo dele no mapa. Mas cuidado: cada erro adiciona +5 segundos ao seu tempo. Clique em avançar para conhecer o labirinto e começar!',
 }
 
 /**
@@ -85,7 +85,7 @@ export const COUNCIL_MEMBERS = [
   {
     id: 1,
     code: 'M1',
-    name: 'Conselheiro I',
+    name: 'Valdir',
     role: 'Cadeira 01 · Diretoria Tributária',
     shortLabel: 'Tributário',
     seatPosition: 'left-outer',
@@ -109,7 +109,7 @@ export const COUNCIL_MEMBERS = [
   {
     id: 2,
     code: 'M2',
-    name: 'Conselheira II',
+    name: 'Ramon',
     role: 'Cadeira 02 · Liderança de Comunicação',
     shortLabel: 'Comunicação',
     seatPosition: 'left-mid',
@@ -138,7 +138,7 @@ export const COUNCIL_MEMBERS = [
   {
     id: 3,
     code: 'M3',
-    name: 'Conselheiro III',
+    name: 'Vanessa',
     role: 'Cadeira 03 · Guardião Financeiro',
     shortLabel: 'Enigma',
     seatPosition: 'left-inner',
@@ -161,14 +161,70 @@ export const COUNCIL_MEMBERS = [
   {
     id: 4,
     code: 'M4',
-    name: 'Conselheira IV',
-    role: 'Cadeira 04 · Gestão de Atendimento',
-    shortLabel: 'Atendimento',
+    name: 'Jhonny',
+    role: 'Cadeira 04 · Compromisso & Prazos',
+    shortLabel: 'Prazos',
     seatPosition: 'center',
     avatarGradient: 'from-purple-500 to-indigo-950',
     borderAccent: 'border-purple-400',
     glowAccent: 'shadow-purple-500/25',
     badgeBg: 'bg-purple-500/20 text-purple-300 border-purple-400/40',
+    type: 'multiple_choice',
+    greeting:
+      'Na Falavinha Next, nossa palavra vale ouro. Como você age quando um imprevisto interno ameaça o prazo prometido?',
+    question:
+      'Você prometeu retorno hoje, mas quem tinha a informação não respondeu e o dia está terminando. O que fazer?',
+    options: [
+      { id: 'a', label: 'a)', text: 'Informa que continua acompanhando.', isCorrect: false },
+      {
+        id: 'b',
+        label: 'b)',
+        text: 'Cobra novamente a pessoa e espera um pouco mais.',
+        isCorrect: false,
+      },
+      {
+        id: 'c',
+        label: 'c)',
+        text: 'ENTRA EM CONTATO, RECONHECE O ATRASO E COMBINA NOVO PRAZO',
+        isCorrect: true,
+      },
+    ],
+    approvalMessage:
+      'Postura de dono! Assumir o compromisso, informar com transparência e alinhar novo prazo honra nossa cultura. Aprovado!',
+  },
+  {
+    id: 5,
+    code: 'M5',
+    name: 'Juarez',
+    role: 'Cadeira 05 · Segurança Documental',
+    shortLabel: 'Senha',
+    seatPosition: 'right-inner',
+    avatarGradient: 'from-rose-500 to-red-950',
+    borderAccent: 'border-rose-400',
+    glowAccent: 'shadow-rose-500/25',
+    badgeBg: 'bg-rose-500/20 text-rose-300 border-rose-400/40',
+    type: 'text_input',
+    inputType: 'Credencial de Segurança',
+    placeholder: 'Digite a senha...',
+    greeting:
+      'Diante de mim há um dossiê confidencial. Apenas quem detém a senha correta recebe meu aval.',
+    question: 'O documento do cliente está bloqueado. Qual é a senha?',
+    correctAnswer: '1977',
+    caseSensitive: false,
+    approvalMessage:
+      'Senha 1977 validada! O documento do cliente foi desbloqueado com sucesso. Meu voto é favorável!',
+  },
+  {
+    id: 6,
+    code: 'M6',
+    name: 'Ricardo',
+    role: 'Cadeira 06 · Gestão de Atendimento',
+    shortLabel: 'Atendimento',
+    seatPosition: 'right-mid',
+    avatarGradient: 'from-cyan-500 to-slate-900',
+    borderAccent: 'border-cyan-400',
+    glowAccent: 'shadow-cyan-500/25',
+    badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40',
     type: 'multiple_choice',
     greeting:
       'Clientes irritados testam nossa empatia e maturidade profissional. Quero ver como você conduz uma situação crítica.',
@@ -198,65 +254,9 @@ export const COUNCIL_MEMBERS = [
       'Conduta impecável! Ouvir e compreender o incômodo antes de explicar transforma conflito em confiança. Está aprovado!',
   },
   {
-    id: 5,
-    code: 'M5',
-    name: 'Conselheiro V',
-    role: 'Cadeira 05 · Segurança Documental',
-    shortLabel: 'Senha',
-    seatPosition: 'right-inner',
-    avatarGradient: 'from-rose-500 to-red-950',
-    borderAccent: 'border-rose-400',
-    glowAccent: 'shadow-rose-500/25',
-    badgeBg: 'bg-rose-500/20 text-rose-300 border-rose-400/40',
-    type: 'text_input',
-    inputType: 'Credencial de Segurança',
-    placeholder: 'Digite a senha...',
-    greeting:
-      'Diante de mim há um dossiê confidencial. Apenas quem detém a senha correta recebe meu aval.',
-    question: 'O documento do cliente está bloqueado. Qual é a senha?',
-    correctAnswer: '1977',
-    caseSensitive: false,
-    approvalMessage:
-      'Senha 1977 validada! O documento do cliente foi desbloqueado com sucesso. Meu voto é favorável!',
-  },
-  {
-    id: 6,
-    code: 'M6',
-    name: 'Conselheira VI',
-    role: 'Cadeira 06 · Compromisso & Prazos',
-    shortLabel: 'Prazos',
-    seatPosition: 'right-mid',
-    avatarGradient: 'from-cyan-500 to-slate-900',
-    borderAccent: 'border-cyan-400',
-    glowAccent: 'shadow-cyan-500/25',
-    badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40',
-    type: 'multiple_choice',
-    greeting:
-      'Na Falavinha Next, nossa palavra vale ouro. Como você age quando um imprevisto interno ameaça o prazo prometido?',
-    question:
-      'Você prometeu retorno hoje, mas quem tinha a informação não respondeu e o dia está terminando. O que fazer?',
-    options: [
-      { id: 'a', label: 'a)', text: 'Informa que continua acompanhando.', isCorrect: false },
-      {
-        id: 'b',
-        label: 'b)',
-        text: 'Cobra novamente a pessoa e espera um pouco mais.',
-        isCorrect: false,
-      },
-      {
-        id: 'c',
-        label: 'c)',
-        text: 'ENTRA EM CONTATO, RECONHECE O ATRASO E COMBINA NOVO PRAZO',
-        isCorrect: true,
-      },
-    ],
-    approvalMessage:
-      'Postura de dono! Assumir o compromisso, informar com transparência e alinhar novo prazo honra nossa cultura. Aprovado!',
-  },
-  {
     id: 7,
     code: 'M7',
-    name: 'Conselheiro VII',
+    name: 'Ed',
     role: 'Cadeira 07 · Metodologia PEAH',
     shortLabel: 'Código PEAH',
     seatPosition: 'right-outer',

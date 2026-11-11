@@ -102,6 +102,34 @@ export function playSelectSound() {
 }
 
 /**
+ * Bip retro suave durante a digitação da fala dos conselheiros (estilo Ace Attorney / Pokémon).
+ */
+export function playDialogueBlipSound(step = 0) {
+  try {
+    const ctx = getAudioContext()
+    if (!ctx) return
+    const now = ctx.currentTime
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+
+    const baseFreq = 460 + (step % 4) * 28
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(baseFreq, now)
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.08, now + 0.024)
+
+    gain.gain.setValueAtTime(0.032, now)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.028)
+
+    osc.connect(gain)
+    gain.connect(ctx.destination)
+    osc.start(now)
+    osc.stop(now + 0.03)
+  } catch {
+    // Ignora
+  }
+}
+
+/**
  * Som de aprovação de um conselheiro.
  */
 export function playApprovalSound() {
