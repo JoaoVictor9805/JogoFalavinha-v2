@@ -60,6 +60,7 @@ export function GameProvider({ children }) {
   const [isLocked, setIsLocked] = useState(false)
   const [ceoBriefingDismissed, setCeoBriefingDismissed] = useState(false)
   const [mazeModal, setMazeModal] = useState(null)
+  const [screenFadePhase, setScreenFadePhase] = useState('idle') // 'idle' | 'fade-to-black' | 'fade-from-black'
   const [rankingHistory, setRankingHistory] = useState(loadSavedRanking)
 
   // Refs para bloqueio imediato contra spam de cliques e leitura segura em timeouts
@@ -163,37 +164,68 @@ export function GameProvider({ children }) {
     [clearAllTimeouts, registerTimeout]
   )
 
+  // Transição cinematográfica de fade out para preto + fade in para o Conselho (~1 segundo total)
+  const triggerBlackoutTransition = useCallback(
+    (middleAction) => {
+      setScreenFadePhase('fade-to-black')
+      lockRef.current = true
+      setIsLocked(true)
+
+      registerTimeout(() => {
+        if (typeof middleAction === 'function') {
+          middleAction()
+        }
+        setScreenFadePhase('fade-from-black')
+
+        registerTimeout(() => {
+          setScreenFadePhase('idle')
+          lockRef.current = false
+          setIsLocked(false)
+        }, 500)
+      }, 500)
+    },
+    [registerTimeout]
+  )
+
   // Abre o modal 3D de apresentação após o CEO (Jhonny) explicar as regras
   const openIntroMazeModal = useCallback(() => {
     playSelectSound()
-    setMazeModal({ mode: 'intro', fromStep: 0, toStep: 0 })
-  }, [])
+    triggerBlackoutTransition(() => {
+      setMazeModal({ mode: 'intro', fromStep: 0, toStep: 0 })
+    })
+  }, [triggerBlackoutTransition])
 
   // Confirma "OK" no modal inicial do labirinto: fecha intro e inicia o cronômetro oficial
   const confirmIntroMazeAndStart = useCallback(() => {
     playSelectSound()
-    setMazeModal(null)
-    setCeoBriefingDismissed(true)
-    setIsTimerRunning(true)
-  }, [])
+    triggerBlackoutTransition(() => {
+      setMazeModal(null)
+      setCeoBriefingDismissed(true)
+      setIsTimerRunning(true)
+    })
+  }, [triggerBlackoutTransition])
 
   // Abre o modal do mapa manualmente pelo botão inferior direito
   const openManualMazeModal = useCallback(() => {
     playSelectSound()
-    const done = Object.values(stateSnapshotRef.current.memberProgress).filter((m) => m.completed).length
-    setMazeModal({ mode: 'manual', fromStep: done, toStep: done })
-  }, [])
+    triggerBlackoutTransition(() => {
+      const done = Object.values(stateSnapshotRef.current.memberProgress).filter((m) => m.completed).length
+      setMazeModal({ mode: 'manual', fromStep: done, toStep: done })
+    })
+  }, [triggerBlackoutTransition])
 
   // Fecha o modal de progresso/visualização e avança para o Ranking se for a 7ª aprovação
   const closeMazeModal = useCallback(() => {
     playSelectSound()
-    setMazeModal((current) => {
-      if (current?.mode === 'progress' && current?.isFinal) {
-        setScreen('FINAL_RANKING')
-      }
-      return null
+    triggerBlackoutTransition(() => {
+      setMazeModal((current) => {
+        if (current?.mode === 'progress' && current?.isFinal) {
+          setScreen('FINAL_RANKING')
+        }
+        return null
+      })
     })
-  }, [])
+  }, [triggerBlackoutTransition])
 
   // 2. Avançar da Comic Strip para a Transição Preta + Gatilho de Áudio
   const advanceFromComic = useCallback(() => {
@@ -301,20 +333,24 @@ export function GameProvider({ children }) {
               return updated
             })
 
-            setMazeModal({
-              mode: 'progress',
-              fromStep: prevCompleted,
-              toStep: nextCompleted,
-              memberName: member.name,
-              isFinal: true,
+            triggerBlackoutTransition(() => {
+              setMazeModal({
+                mode: 'progress',
+                fromStep: prevCompleted,
+                toStep: nextCompleted,
+                memberName: member.name,
+                isFinal: true,
+              })
             })
           } else {
-            setMazeModal({
-              mode: 'progress',
-              fromStep: prevCompleted,
-              toStep: nextCompleted,
-              memberName: member.name,
-              isFinal: false,
+            triggerBlackoutTransition(() => {
+              setMazeModal({
+                mode: 'progress',
+                fromStep: prevCompleted,
+                toStep: nextCompleted,
+                memberName: member.name,
+                isFinal: false,
+              })
             })
           }
 
@@ -356,7 +392,7 @@ export function GameProvider({ children }) {
         }, 650)
       }
     },
-    [registerTimeout]
+    [registerTimeout, triggerBlackoutTransition]
   )
 
   // 5A. Responder questão de Múltipla Escolha
@@ -446,6 +482,7 @@ export function GameProvider({ children }) {
       isLocked,
       ceoBriefingDismissed,
       mazeModal,
+      screenFadePhase,
       rankingHistory,
       setCeoBriefingDismissed,
       openIntroMazeModal,
@@ -478,6 +515,7 @@ export function GameProvider({ children }) {
       isLocked,
       ceoBriefingDismissed,
       mazeModal,
+      screenFadePhase,
       rankingHistory,
       openIntroMazeModal,
       confirmIntroMazeAndStart,

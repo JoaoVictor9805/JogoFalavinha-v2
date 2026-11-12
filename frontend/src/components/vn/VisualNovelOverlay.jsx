@@ -13,25 +13,60 @@ import cutout2Ramon from '../../assets/cutout-2-ramon.png'
 import cutout3Vanessa from '../../assets/cutout-3-vanessa.png'
 import cutout4Jhonny from '../../assets/cutout-4-jhonny.png'
 import cutout5Juarez from '../../assets/cutout-5-juarez.png'
-import cutout6Ricardo from '../../assets/cutout-6-ricardo.png'
+import cutout6RicardoPose1 from '../../assets/cutout-6-ricardo-pose1.png'
+import cutout6RicardoPose2 from '../../assets/cutout-6-ricardo-pose2.png'
+import cutout6RicardoPose3 from '../../assets/cutout-6-ricardo-pose3.png'
+import cutout6RicardoWrong from '../../assets/cutout-6-ricardo-wrong.png'
+import cutout6RicardoSuccess from '../../assets/cutout-6-ricardo-success.png'
 import cutout7EdPose1 from '../../assets/cutout-7-ed-pose1.png'
 import cutout7EdPose2 from '../../assets/cutout-7-ed-pose2.png'
 import cutout7EdPose3 from '../../assets/cutout-7-ed-pose3.png'
+import cutout7EdWrong from '../../assets/cutout-7-ed-wrong.png'
+import cutout7EdSuccess from '../../assets/cutout-7-ed-success.png'
 import { useGame } from '../../context/gameContextInstance'
 import { CEO_TRIBUNAL_BRIEFING, getErrorDialogue } from '../../data/conselhoNextData'
 import { useTypewriter } from '../../hooks/useTypewriter'
 import { playDialogueBlipSound } from '../../utils/soundEffects'
 
 const POSE_SWITCH_INTERVAL_MS = 2000
+const WRONG_POSE_DURATION_MS = 2000
 
 const MEMBER_CUTOUTS = {
-  1: [cutout1Valdir],
-  2: [cutout2Ramon],
-  3: [cutout3Vanessa],
-  4: [cutout4Jhonny],
-  5: [cutout5Juarez],
-  6: [cutout6Ricardo],
-  7: [cutout7EdPose1, cutout7EdPose2, cutout7EdPose3],
+  1: {
+    default: [cutout1Valdir],
+    wrong: null,
+    success: null,
+  },
+  2: {
+    default: [cutout2Ramon],
+    wrong: null,
+    success: null,
+  },
+  3: {
+    default: [cutout3Vanessa],
+    wrong: null,
+    success: null,
+  },
+  4: {
+    default: [cutout4Jhonny],
+    wrong: null,
+    success: null,
+  },
+  5: {
+    default: [cutout5Juarez],
+    wrong: null,
+    success: null,
+  },
+  6: {
+    default: [cutout6RicardoPose1, cutout6RicardoPose2, cutout6RicardoPose3],
+    wrong: cutout6RicardoWrong,
+    success: cutout6RicardoSuccess,
+  },
+  7: {
+    default: [cutout7EdPose1, cutout7EdPose2, cutout7EdPose3],
+    wrong: cutout7EdWrong,
+    success: cutout7EdSuccess,
+  },
 }
 
 function VisualNovelOverlay({ isCeoIntro = false }) {
@@ -48,22 +83,28 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
 
   const [textValue, setTextValue] = useState('')
   const [poseIndex, setPoseIndex] = useState(0)
+  const [prevFeedback, setPrevFeedback] = useState(vnFeedback)
+  const [isShowingWrongPose, setIsShowingWrongPose] = useState(false)
 
-  const memberId = activeMember?.id
-  const counselorPoses = isCeoIntro
-    ? [cutout4Jhonny]
-    : (memberId && MEMBER_CUTOUTS[memberId]) || [cutout4Jhonny]
-  const activePoseCount = counselorPoses.length
+  if (vnFeedback !== prevFeedback) {
+    setPrevFeedback(vnFeedback)
+    if (vnFeedback === 'wrong') {
+      setIsShowingWrongPose(true)
+    }
+  }
 
   useEffect(() => {
-    if (activePoseCount <= 1) return undefined
+    if (!isShowingWrongPose) return undefined
 
-    const timer = setInterval(() => {
-      setPoseIndex((prev) => (prev + 1) % activePoseCount)
-    }, POSE_SWITCH_INTERVAL_MS)
+    const timer = setTimeout(() => {
+      setIsShowingWrongPose(false)
+      setPoseIndex(0)
+    }, WRONG_POSE_DURATION_MS)
 
-    return () => clearInterval(timer)
-  }, [activePoseCount])
+    return () => clearTimeout(timer)
+  }, [isShowingWrongPose])
+
+  const memberId = activeMember?.id
 
   const progress = (memberId && memberProgress[memberId]) || {
     completed: false,
@@ -83,6 +124,26 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
       : dynamicErrorSpeech
         ? 'error'
         : 'greeting'
+
+  const memberConfig = memberId ? MEMBER_CUTOUTS[memberId] : null
+  const counselorPoses = isCeoIntro
+    ? [cutout4Jhonny]
+    : isApprovedState && memberConfig?.success
+      ? [memberConfig.success]
+      : isShowingWrongPose && memberConfig?.wrong
+        ? [memberConfig.wrong]
+        : memberConfig?.default || [cutout4Jhonny]
+  const activePoseCount = counselorPoses.length
+
+  useEffect(() => {
+    if (activePoseCount <= 1) return undefined
+
+    const timer = setInterval(() => {
+      setPoseIndex((prev) => (prev + 1) % activePoseCount)
+    }, POSE_SWITCH_INTERVAL_MS)
+
+    return () => clearInterval(timer)
+  }, [activePoseCount])
 
   const currentSpeech = isCeoIntro
     ? CEO_TRIBUNAL_BRIEFING.message
@@ -242,16 +303,16 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
         </div>
       </div>
 
-      {/* Mesma horizontal: Imagem viva ancorada na base à esquerda + Caixa de perguntas/ação à direita */}
-      <main className="flex-1 flex">
-        <div className="max-w-6xl w-full mx-auto px-4 sm:px-8 pt-4 lg:pt-6 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 items-stretch">
-          {/* Esquerda: Recorte ancorado na base da tela, com aura sutil e respiração */}
-          <div className="lg:col-span-5 self-end flex justify-center items-end pt-2 pb-0 order-2 lg:order-1 animate-portrait-enter relative">
+      {/* Mesma horizontal: Imagem viva alinhada à base da caixa de perguntas à esquerda + Caixa de perguntas/ação à direita */}
+      <main className="flex-1 flex items-start lg:items-center">
+        <div className="max-w-6xl w-full mx-auto px-4 sm:px-8 pt-4 pb-16 sm:pb-20 lg:pt-6 lg:pb-10 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 lg:items-end">
+          {/* Esquerda: Recorte alinhado ao final da caixa de pergunta, com aura sutil e respiração */}
+          <div className="lg:col-span-5 lg:self-end flex justify-center items-end pt-2 pb-0 order-2 lg:order-1 animate-portrait-enter relative">
             <div
-              className={`pointer-events-none absolute bottom-4 w-60 h-60 rounded-full blur-3xl transition-colors duration-500 ${auraClass}`}
+              className={`pointer-events-none absolute bottom-4 w-72 h-72 rounded-full blur-3xl transition-colors duration-500 ${auraClass}`}
             />
             <div
-              className={`relative inline-flex justify-center items-end select-none pointer-events-none ${portraitReactionClass}`}
+              className={`relative inline-flex justify-center items-end origin-bottom select-none pointer-events-none ${portraitReactionClass}`}
             >
               {counselorPoses.map((poseSrc, idx) => {
                 const isActive = idx === poseIndex % counselorPoses.length
@@ -262,7 +323,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                     alt={idx === 0 ? speakerName : ''}
                     aria-hidden={idx > 0}
                     draggable={false}
-                    className={`h-[260px] sm:h-[330px] lg:h-[420px] w-auto object-contain object-bottom saturate-[1.06] contrast-[1.03] ${
+                    className={`h-[280px] sm:h-[360px] lg:h-[clamp(400px,56vh,540px)] w-auto object-contain object-bottom saturate-[1.06] contrast-[1.03] ${
                       idx === 0 ? 'relative' : 'absolute inset-0 w-full h-full'
                     } ${isActive ? 'opacity-100' : 'opacity-0'}`}
                   />
@@ -272,7 +333,11 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
           </div>
 
           {/* Direita: Botão "Ver Mapa e Iniciar" (quando for o CEO) ou Pergunta e Alternativas/Input */}
-          <section className="lg:col-span-7 self-center pb-16 sm:pb-20 lg:pb-12 space-y-5 order-1 lg:order-2 animate-modal-pop">
+          <section
+            className={`lg:col-span-7 space-y-5 order-1 lg:order-2 animate-modal-pop ${
+              isCeoIntro ? 'lg:self-center' : 'lg:self-end'
+            }`}
+          >
             {isCeoIntro ? (
               <div className="bg-[#FDFBF7] border-2 border-stone-900 p-6 sm:p-8 shadow-[6px_6px_0px_#1C1917] space-y-5">
                 <div className="border-l-4 border-[#D99B38] pl-4 space-y-1">

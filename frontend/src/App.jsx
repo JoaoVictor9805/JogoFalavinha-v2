@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import HudTimerHeader from './components/hud/HudTimerHeader'
 import ArrivalTransition from './components/screens/ArrivalTransition'
 import ComicIntroScreen from './components/screens/ComicIntroScreen'
@@ -8,7 +9,11 @@ import { GameProvider } from './context/GameContext'
 import { useGame } from './context/gameContextInstance'
 
 function GameScreenRouter() {
-  const { screen } = useGame()
+  const { screen, screenFadePhase } = useGame()
+
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [screen])
 
   return (
     <div className="relative min-h-screen w-full bg-[#F5F0E6] text-stone-900">
@@ -40,6 +45,18 @@ function GameScreenRouter() {
           <FinalRankingScreen />
         </div>
       )}
+
+      {/* Transição cinematográfica: Fade out para preto (500ms) + Fade in do conselho (500ms) = ~1s total */}
+      <div
+        aria-hidden="true"
+        className={`fixed inset-0 z-[100] bg-stone-950 transition-opacity duration-500 ease-in-out ${
+          screenFadePhase === 'fade-to-black'
+            ? 'opacity-100 pointer-events-auto'
+            : screenFadePhase === 'fade-from-black'
+              ? 'opacity-0 pointer-events-auto'
+              : 'opacity-0 pointer-events-none'
+        }`}
+      />
     </div>
   )
 }

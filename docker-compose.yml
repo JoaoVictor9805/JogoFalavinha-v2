@@ -13,7 +13,7 @@ services:
     environment:
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
-      - VITE_API_URL=http://localhost:3001/api
+      - API_PROXY_TARGET=http://backend:3001
 
   # Estrutura pronta para a 2a fase (desenvolvimento da API Node)
   # Para subir também o backend: docker compose --profile backend up -d

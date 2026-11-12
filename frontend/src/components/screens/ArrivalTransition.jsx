@@ -25,7 +25,7 @@ function ArrivalTransition() {
   }, [finishArrivalTransition])
 
   return (
-    <div className="fixed inset-0 z-40 bg-[#F5F0E6] text-stone-900 flex flex-col items-center justify-center p-6 text-center select-none animate-overlay-enter">
+    <div className="min-h-screen w-full bg-[#F5F0E6] text-stone-900 flex flex-col items-center justify-center p-6 text-center select-none">
       <div className="max-w-xl w-full bg-[#FDFBF7] border-2 border-stone-900 border-t-4 border-t-[#D99B38] p-8 sm:p-10 shadow-[8px_8px_0px_#1C1917] space-y-6 animate-modal-pop">
         <div className="mx-auto w-20 h-20 rounded-none bg-[#F5F0E6] border-2 border-[#D99B38] flex items-center justify-center text-[#B87D1E] shadow-[3px_3px_0px_#1C1917]">
           <DoorClosed className="w-9 h-9 animate-vn-idle" />
