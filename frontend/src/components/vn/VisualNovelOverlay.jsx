@@ -9,7 +9,11 @@ import {
   XCircle,
 } from 'lucide-react'
 import cutout1Valdir from '../../assets/cutout-1-valdir.png'
-import cutout2Ramon from '../../assets/cutout-2-ramon.png'
+import cutout2RamonPose1 from '../../assets/cutout-2-ramon-pose1.png'
+import cutout2RamonPose2 from '../../assets/cutout-2-ramon-pose2.png'
+import cutout2RamonPose3 from '../../assets/cutout-2-ramon-pose3.png'
+import cutout2RamonWrong from '../../assets/cutout-2-ramon-wrong.png'
+import cutout2RamonSuccess from '../../assets/cutout-2-ramon-success.png'
 import cutout3Vanessa from '../../assets/cutout-3-vanessa.png'
 import cutout4Jhonny from '../../assets/cutout-4-jhonny.png'
 import cutout5Juarez from '../../assets/cutout-5-juarez.png'
@@ -38,9 +42,9 @@ const MEMBER_CUTOUTS = {
     success: null,
   },
   2: {
-    default: [cutout2Ramon],
-    wrong: null,
-    success: null,
+    default: [cutout2RamonPose1, cutout2RamonPose2, cutout2RamonPose3],
+    wrong: cutout2RamonWrong,
+    success: cutout2RamonSuccess,
   },
   3: {
     default: [cutout3Vanessa],
