@@ -9,7 +9,11 @@ import {
   XCircle,
 } from 'lucide-react'
 import cutout1Valdir from '../../assets/cutout-1-valdir.png'
-import cutout2Ramon from '../../assets/cutout-2-ramon.png'
+import cutout2RamonPose1 from '../../assets/cutout-2-ramon-pose1.png'
+import cutout2RamonPose2 from '../../assets/cutout-2-ramon-pose2.png'
+import cutout2RamonPose3 from '../../assets/cutout-2-ramon-pose3.png'
+import cutout2RamonWrong from '../../assets/cutout-2-ramon-wrong.png'
+import cutout2RamonSuccess from '../../assets/cutout-2-ramon-success.png'
 import cutout3Vanessa from '../../assets/cutout-3-vanessa.png'
 import cutout4Jhonny from '../../assets/cutout-4-jhonny.png'
 import cutout5Juarez from '../../assets/cutout-5-juarez.png'
@@ -38,9 +42,9 @@ const MEMBER_CUTOUTS = {
     success: null,
   },
   2: {
-    default: [cutout2Ramon],
-    wrong: null,
-    success: null,
+    default: [cutout2RamonPose1, cutout2RamonPose2, cutout2RamonPose3],
+    wrong: cutout2RamonWrong,
+    success: cutout2RamonSuccess,
   },
   3: {
     default: [cutout3Vanessa],
@@ -85,6 +89,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
   const [poseIndex, setPoseIndex] = useState(0)
   const [prevFeedback, setPrevFeedback] = useState(vnFeedback)
   const [isShowingWrongPose, setIsShowingWrongPose] = useState(false)
+  const [selectedOptionId, setSelectedOptionId] = useState(null)
 
   if (vnFeedback !== prevFeedback) {
     setPrevFeedback(vnFeedback)
@@ -105,6 +110,10 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
   }, [isShowingWrongPose])
 
   const memberId = activeMember?.id
+
+  useEffect(() => {
+    setSelectedOptionId(null)
+  }, [memberId])
 
   const progress = (memberId && memberProgress[memberId]) || {
     completed: false,
@@ -373,14 +382,17 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                   <div className="space-y-3">
                     {activeMember.options?.map((option, optIdx) => {
                       const isOptionDisabled = progress.disabledOptions.includes(option.id)
-                      const isHighlightedSuccess = isApprovedState && option.isCorrect
+                      const isHighlightedSuccess = isApprovedState && selectedOptionId === option.id
 
                       return (
                         <button
                           key={option.id}
                           type="button"
                           disabled={isLocked || isOptionDisabled || isApprovedState}
-                          onClick={() => submitMultipleChoice(activeMember.id, option.id)}
+                          onClick={() => {
+                            setSelectedOptionId(option.id)
+                            submitMultipleChoice(activeMember.id, option.id)
+                          }}
                           style={{ animationDelay: `${optIdx * 60}ms` }}
                           className={`group w-full text-left p-4 border-2 flex items-center justify-between gap-3 animate-panel-rise transition-all duration-200 ${
                             isHighlightedSuccess

@@ -1,0 +1,119 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Colaborador / Jogador cadastrado no sistema
+model Jogador {
+  id           String     @id @default(uuid())
+  nome         String
+  email        String     @unique
+  unidade      String
+  setor        String
+  senha        String?    // Senha simples para login (hash adicionado na Fase 7)
+  criadoEm     DateTime   @default(now()) @map("criado_em")
+  atualizadoEm DateTime   @updatedAt @map("atualizado_em")
+  partidas     Partida[]
+
+  @@map("jogadores")
+  @@index([email])
+  @@index([setor])
+  @@index([unidade])
+}
+
+// Sessão / Partida do colaborador
+model Partida {
+  id                  String               @id @default(uuid())
+  jogadorId           String               @map("jogador_id")
+  jogador             Jogador              @relation(fields: [jogadorId], references: [id], onDelete: Cascade)
+  status              String               @default("EM_ANDAMENTO") // "EM_ANDAMENTO" | "CONCLUIDA"
+  iniciadoEm          DateTime             @default(now()) @map("iniciado_em")
+  finalizadoEm        DateTime?            @map("finalizado_em")
+  segundosReais       Int                  @default(0) @map("segundos_reais")
+  segundosPenalidade  Int                  @default(0) @map("segundos_penalidade")
+  segundosTotais      Int                  @default(0) @map("segundos_totais")
+  totalErros          Int                  @default(0) @map("total_erros")
+  etapaAtual          Int                  @default(0) @map("etapa_atual") // 0 a 7 (progresso no labirinto)
+  membrosConcluidos   Int[]                @default([]) @map("membros_concluidos") // IDs dos membros já aprovados
+  tentativas          Tentativa[]
+  opcoesDesabilitadas OpcaoDesabilitada[]
+  criadoEm            DateTime             @default(now()) @map("criado_em")
+  atualizadoEm        DateTime             @updatedAt @map("atualizado_em")
+
+  @@map("partidas")
+  @@index([jogadorId])
+  @@index([status])
+  @@index([segundosTotais])
+}
+
+// Desafio oficial (um dos 7 membros do Conselho Next)
+model Desafio {
+  id                Int            @id // 1 a 7
+  codigo            String         // M1 a M7
+  nome              String         // Valdir, Ramon, Vanessa, etc.
+  cargo             String
+  rotuloCurto       String         @map("rotulo_curto")
+  posicaoMesa       String         @map("posicao_mesa")
+  gradienteAvatar   String         @map("gradiente_avatar")
+  corBorda          String         @map("cor_borda")
+  corBrilho         String         @map("cor_brilho")
+  corBadge          String         @map("cor_badge")
+  tipo              String         @default("multiple_choice")
+  saudacao          String         @db.Text
+  pergunta          String         @db.Text
+  mensagemAprovacao String         @map("mensagem_aprovacao") @db.Text
+  opcoes            OpcaoDesafio[]
+  tentativas        Tentativa[]
+
+  @@map("desafios")
+}
+
+// Alternativas de cada desafio (o campo 'correta' NUNCA é enviado ao frontend)
+model OpcaoDesafio {
+  id        String   @id @default(uuid())
+  desafioId Int      @map("desafio_id")
+  desafio   Desafio  @relation(fields: [desafioId], references: [id], onDelete: Cascade)
+  opcaoId   String   @map("opcao_id") // 'a', 'b', 'c', 'd'
+  rotulo    String   // 'a)', 'b)', etc.
+  texto     String   @db.Text
+  correta   Boolean  // Gabarito protegido no banco de dados
+
+  @@unique([desafioId, opcaoId])
+  @@index([desafioId])
+  @@map("opcoes_desafio")
+}
+
+// Opções desabilitadas após erros cometidos em uma partida
+model OpcaoDesabilitada {
+  id        String   @id @default(uuid())
+  partidaId String   @map("partida_id")
+  partida   Partida  @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  membroId  Int      @map("membro_id")
+  opcaoId   String   @map("opcao_id")
+  criadoEm  DateTime @default(now()) @map("criado_em")
+
+  @@unique([partidaId, membroId, opcaoId])
+  @@index([partidaId])
+  @@map("opcoes_desabilitadas")
+}
+
+// Log e auditoria de cada tentativa de resposta do jogador
+model Tentativa {
+  id                 String   @id @default(uuid())
+  partidaId          String   @map("partida_id")
+  partida            Partida  @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  desafioId          Int      @map("desafio_id")
+  desafio            Desafio  @relation(fields: [desafioId], references: [id])
+  opcaoSelecionada   String   @map("opcao_selecionada") // 'a', 'b', 'c', 'd'
+  acertou            Boolean
+  penalidadeAplicada Int      @default(0) @map("penalidade_aplicada") // 0 ou 5
+  criadoEm           DateTime @default(now()) @map("criado_em")
+
+  @@index([partidaId])
+  @@index([desafioId])
+  @@map("tentativas")
+}

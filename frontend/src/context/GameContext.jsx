@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { COUNCIL_MEMBERS } from '../data/conselhoNextData'
+import { apiService } from '../services/apiService'
 import {
   playApprovalSound,
   playPenaltySound,
@@ -8,12 +9,11 @@ import {
 } from '../utils/soundEffects'
 import { GameContext } from './gameContextInstance'
 
-const RANKING_STORAGE_KEY = 'conselho_next_ranking_v2'
 const PLAYER_STORAGE_KEY = 'conselho_next_last_player_v2'
 
-function createInitialMemberProgress() {
+function createInitialMemberProgress(membersList = COUNCIL_MEMBERS) {
   const initial = {}
-  COUNCIL_MEMBERS.forEach((member) => {
+  membersList.forEach((member) => {
     initial[member.id] = {
       completed: false,
       errors: 0,
@@ -22,15 +22,6 @@ function createInitialMemberProgress() {
     }
   })
   return initial
-}
-
-function loadSavedRanking() {
-  try {
-    const raw = localStorage.getItem(RANKING_STORAGE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
 }
 
 function loadSavedPlayer() {
@@ -46,6 +37,9 @@ export function GameProvider({ children }) {
   // Progressão de telas: 'REGISTRATION' | 'COMIC_INTRO' | 'TRANSITION_ARRIVAL' | 'TRIBUNAL_HUB' | 'FINAL_RANKING'
   const [screen, setScreen] = useState('REGISTRATION')
   const [player, setPlayer] = useState(loadSavedPlayer)
+  const [activePartida, setActivePartida] = useState(null)
+  const [challenges, setChallenges] = useState(COUNCIL_MEMBERS)
+  const [authError, setAuthError] = useState('')
 
   // Cronômetro global em segundos reais + penalidades (+5s por erro)
   const [isTimerRunning, setIsTimerRunning] = useState(false)
@@ -54,14 +48,17 @@ export function GameProvider({ children }) {
   const [penaltyAlertKey, setPenaltyAlertKey] = useState(0)
 
   // Estado dos 7 conselheiros, Overlay Visual Novel e Modal do Labirinto 3D
-  const [memberProgress, setMemberProgress] = useState(createInitialMemberProgress)
+  const [memberProgress, setMemberProgress] = useState(() => createInitialMemberProgress(COUNCIL_MEMBERS))
   const [activeMemberId, setActiveMemberId] = useState(null)
   const [vnFeedback, setVnFeedback] = useState('idle') // 'idle' | 'wrong' | 'approved'
   const [isLocked, setIsLocked] = useState(false)
   const [ceoBriefingDismissed, setCeoBriefingDismissed] = useState(false)
   const [mazeModal, setMazeModal] = useState(null)
   const [screenFadePhase, setScreenFadePhase] = useState('idle') // 'idle' | 'fade-to-black' | 'fade-from-black'
-  const [rankingHistory, setRankingHistory] = useState(loadSavedRanking)
+
+  // Rankings oficiais do servidor (Geral e por Setor)
+  const [rankingHistory, setRankingHistory] = useState([])
+  const [rankingSetores, setRankingSetores] = useState([])
 
   // Refs para bloqueio imediato contra spam de cliques e leitura segura em timeouts
   const lockRef = useRef(false)
@@ -70,7 +67,8 @@ export function GameProvider({ children }) {
     realSeconds: 0,
     penaltySeconds: 0,
     player: null,
-    memberProgress: createInitialMemberProgress(),
+    activePartida: null,
+    memberProgress: createInitialMemberProgress(COUNCIL_MEMBERS),
   })
 
   useEffect(() => {
@@ -78,9 +76,42 @@ export function GameProvider({ children }) {
       realSeconds,
       penaltySeconds,
       player,
+      activePartida,
       memberProgress,
     }
-  }, [realSeconds, penaltySeconds, player, memberProgress])
+  }, [realSeconds, penaltySeconds, player, activePartida, memberProgress])
+
+  // Carrega os 7 desafios protegidos da API no mount
+  useEffect(() => {
+    apiService
+      .obterDesafios()
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setChallenges(data)
+        }
+      })
+      .catch((err) => {
+        console.warn('[GameContext] Usando dados locais como fallback:', err)
+      })
+  }, [])
+
+  // Carrega rankings iniciais em segundo plano
+  const recarregarRankings = useCallback(async () => {
+    try {
+      const [geral, setores] = await Promise.all([
+        apiService.obterRankingGeral(),
+        apiService.obterRankingSetores(),
+      ])
+      setRankingHistory(geral || [])
+      setRankingSetores(setores || [])
+    } catch (err) {
+      console.warn('[GameContext] Erro ao carregar rankings:', err)
+    }
+  }, [])
+
+  useEffect(() => {
+    recarregarRankings()
+  }, [recarregarRankings])
 
   const registerTimeout = useCallback((fn, delay) => {
     const id = setTimeout(fn, delay)
@@ -97,7 +128,7 @@ export function GameProvider({ children }) {
     return () => clearAllTimeouts()
   }, [clearAllTimeouts])
 
-  // Cronômetro global em segundo plano (inicia no clique em "Iniciar" do Cadastro)
+  // Cronômetro global em segundo plano
   useEffect(() => {
     if (!isTimerRunning) return undefined
 
@@ -107,6 +138,17 @@ export function GameProvider({ children }) {
 
     return () => clearInterval(interval)
   }, [isTimerRunning])
+
+  // Sincronização periódica do tempo no banco a cada 10 segundos
+  useEffect(() => {
+    if (!isTimerRunning || !activePartida?.id) return undefined
+
+    const syncInterval = setInterval(() => {
+      apiService.sincronizarTempo(activePartida.id, stateSnapshotRef.current.realSeconds).catch(() => { })
+    }, 10000)
+
+    return () => clearInterval(syncInterval)
+  }, [isTimerRunning, activePartida?.id])
 
   const totalSeconds = realSeconds + penaltySeconds
 
@@ -120,49 +162,12 @@ export function GameProvider({ children }) {
 
   const activeMember = useMemo(() => {
     if (!activeMemberId) return null
-    return COUNCIL_MEMBERS.find((m) => m.id === activeMemberId) || null
-  }, [activeMemberId])
+    return challenges.find((m) => m.id === activeMemberId) || null
+  }, [activeMemberId, challenges])
 
-  // 1. Iniciar jogo a partir da Tela de Cadastro
-  const startGameFromRegistration = useCallback(
-    (playerData) => {
-      if (lockRef.current) return
-      lockRef.current = true
-      setIsLocked(true)
-
-      clearAllTimeouts()
-      const normalizedPlayer = {
-        nome: String(playerData.nome || '').trim(),
-        email: String(playerData.email || '').trim(),
-        unidade: playerData.unidade,
-        setor: playerData.setor,
-      }
-
-      setPlayer(normalizedPlayer)
-      try {
-        localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(normalizedPlayer))
-      } catch {
-        // Ignora erro de storage
-      }
-
-      setMemberProgress(createInitialMemberProgress())
-      setRealSeconds(0)
-      setPenaltySeconds(0)
-      setPenaltyAlertKey(0)
-      setActiveMemberId(null)
-      setVnFeedback('idle')
-      setCeoBriefingDismissed(false)
-      setMazeModal(null)
-      setIsTimerRunning(false)
-      setScreen('COMIC_INTRO')
-
-      registerTimeout(() => {
-        lockRef.current = false
-        setIsLocked(false)
-      }, 300)
-    },
-    [clearAllTimeouts, registerTimeout]
-  )
+  const clearAuthError = useCallback(() => {
+    setAuthError('')
+  }, [])
 
   // Transição cinematográfica de fade out para preto + fade in para o Conselho (~1 segundo total)
   const triggerBlackoutTransition = useCallback(
@@ -187,7 +192,136 @@ export function GameProvider({ children }) {
     [registerTimeout]
   )
 
-  // Abre o modal 3D de apresentação após o CEO (Jhonny) explicar as regras
+  // 1A. Iniciar jogo através do NOVO CADASTRO
+  const startGameFromRegistration = useCallback(
+    async (formData) => {
+      setAuthError('')
+      lockRef.current = true
+      setIsLocked(true)
+
+      try {
+        clearAllTimeouts()
+
+        // 1. Cadastra no PostgreSQL via API
+        const cadRes = await apiService.cadastrar({
+          nome: formData.nome,
+          email: formData.email,
+          unidade: formData.unidade,
+          setor: formData.setor,
+          senha: formData.senha || null,
+        })
+
+        const jogador = cadRes.jogador
+        setPlayer(jogador)
+        try {
+          localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(jogador))
+        } catch { }
+
+        // 2. Inicia uma nova partida no banco
+        const partidaRes = await apiService.iniciarPartida(jogador.id)
+        setActivePartida(partidaRes.partida)
+
+        // 3. Inicializa estado de jogo limpo
+        setMemberProgress(createInitialMemberProgress(challenges))
+        setRealSeconds(0)
+        setPenaltySeconds(0)
+        setPenaltyAlertKey(0)
+        setActiveMemberId(null)
+        setVnFeedback('idle')
+        setCeoBriefingDismissed(false)
+        setMazeModal(null)
+        setIsTimerRunning(false)
+        setScreen('COMIC_INTRO')
+      } catch (err) {
+        setAuthError(err.message || 'Erro ao realizar cadastro.')
+        throw err
+      } finally {
+        lockRef.current = false
+        setIsLocked(false)
+      }
+    },
+    [challenges, clearAllTimeouts]
+  )
+
+  // 1B. Iniciar ou Retomar jogo através do LOGIN
+  const loginAndStart = useCallback(
+    async (loginData) => {
+      setAuthError('')
+      lockRef.current = true
+      setIsLocked(true)
+
+      try {
+        clearAllTimeouts()
+
+        // 1. Faz login no servidor
+        const loginRes = await apiService.login({
+          email: loginData.email,
+          senha: loginData.senha,
+        })
+
+        const jogador = loginRes.jogador
+        setPlayer(jogador)
+        try {
+          localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(jogador))
+        } catch { }
+
+        // 2. Verifica se já existe uma partida em andamento para retomar
+        let partida = loginRes.partidaEmAndamento
+        if (!partida) {
+          const partidaRes = await apiService.iniciarPartida(jogador.id)
+          partida = partidaRes.partida
+        }
+        setActivePartida(partida)
+
+        // 3. Reconstitui o progresso salvo a partir dos dados do banco
+        const initial = createInitialMemberProgress(challenges)
+        const concluidos = partida.membrosConcluidos || []
+        const desabilitadas = partida.opcoesDesabilitadas || []
+
+        concluidos.forEach((id) => {
+          if (initial[id]) {
+            initial[id].completed = true
+          }
+        })
+
+        desabilitadas.forEach((d) => {
+          if (initial[d.membroId]) {
+            initial[d.membroId].disabledOptions = Array.from(
+              new Set([...initial[d.membroId].disabledOptions, d.opcaoId])
+            )
+          }
+        })
+
+        setMemberProgress(initial)
+        setRealSeconds(partida.segundosReais || 0)
+        setPenaltySeconds(partida.segundosPenalidade || 0)
+        setPenaltyAlertKey(0)
+        setActiveMemberId(null)
+        setVnFeedback('idle')
+        setMazeModal(null)
+
+        // Se já tinha avançado no jogo, retoma direto no Tribunal
+        if (concluidos.length > 0 || (partida.segundosReais || 0) > 0) {
+          setCeoBriefingDismissed(true)
+          setIsTimerRunning(true)
+          setScreen('TRIBUNAL_HUB')
+        } else {
+          setCeoBriefingDismissed(false)
+          setIsTimerRunning(false)
+          setScreen('COMIC_INTRO')
+        }
+      } catch (err) {
+        setAuthError(err.message || 'Erro ao realizar login.')
+        throw err
+      } finally {
+        lockRef.current = false
+        setIsLocked(false)
+      }
+    },
+    [challenges, clearAllTimeouts]
+  )
+
+  // Abre o modal 3D de apresentação após o CEO explicar as regras
   const openIntroMazeModal = useCallback(() => {
     playSelectSound()
     triggerBlackoutTransition(() => {
@@ -195,7 +329,7 @@ export function GameProvider({ children }) {
     })
   }, [triggerBlackoutTransition])
 
-  // Confirma "OK" no modal inicial do labirinto: fecha intro e inicia o cronômetro oficial
+  // Confirma "OK" no modal inicial do labirinto: inicia cronômetro oficial
   const confirmIntroMazeAndStart = useCallback(() => {
     playSelectSound()
     triggerBlackoutTransition(() => {
@@ -205,7 +339,7 @@ export function GameProvider({ children }) {
     })
   }, [triggerBlackoutTransition])
 
-  // Abre o modal do mapa manualmente pelo botão inferior direito
+  // Abre o modal do mapa manualmente
   const openManualMazeModal = useCallback(() => {
     playSelectSound()
     triggerBlackoutTransition(() => {
@@ -214,20 +348,21 @@ export function GameProvider({ children }) {
     })
   }, [triggerBlackoutTransition])
 
-  // Fecha o modal de progresso/visualização e avança para o Ranking se for a 7ª aprovação
+  // Fecha o modal de progresso
   const closeMazeModal = useCallback(() => {
     playSelectSound()
     triggerBlackoutTransition(() => {
       setMazeModal((current) => {
         if (current?.mode === 'progress' && current?.isFinal) {
           setScreen('FINAL_RANKING')
+          recarregarRankings()
         }
         return null
       })
     })
-  }, [triggerBlackoutTransition])
+  }, [recarregarRankings, triggerBlackoutTransition])
 
-  // 2. Avançar da Comic Strip para a Transição Preta + Gatilho de Áudio
+  // Avançar da Comic Strip para a Transição
   const advanceFromComic = useCallback(() => {
     if (lockRef.current) return
     lockRef.current = true
@@ -241,14 +376,14 @@ export function GameProvider({ children }) {
     }, 350)
   }, [registerTimeout])
 
-  // 3. Concluir Transição e revelar O Tribunal (Hub Principal)
+  // Concluir Transição e revelar O Tribunal
   const finishArrivalTransition = useCallback(() => {
     lockRef.current = false
     setIsLocked(false)
     setScreen('TRIBUNAL_HUB')
   }, [])
 
-  // 4. Selecionar um membro no Tribunal para abrir o Overlay Visual Novel
+  // Selecionar um membro no Tribunal
   const openMemberDialog = useCallback(
     (memberId) => {
       if (lockRef.current) return
@@ -262,7 +397,7 @@ export function GameProvider({ children }) {
     [memberProgress]
   )
 
-  // Fechar voluntariamente o Overlay para escolher outro membro no Hub
+  // Fechar o Overlay do conselheiro
   const closeMemberDialog = useCallback(() => {
     if (lockRef.current) return
     playSelectSound()
@@ -270,185 +405,131 @@ export function GameProvider({ children }) {
     setActiveMemberId(null)
   }, [])
 
-  // Função interna compartilhada para aplicar aprovação ou punição (+5s)
-  const handleAnswerEvaluation = useCallback(
-    (member, isCorrect, wrongPayload = {}) => {
-      if (isCorrect) {
-        playApprovalSound()
-        setVnFeedback('approved')
-
-        // Delay obrigatório de 2,5 segundos congelado para leitura do elogio
-        registerTimeout(() => {
-          const snapshot = stateSnapshotRef.current
-          const prevCompleted = Object.values(snapshot.memberProgress).filter(
-            (item) => item.completed
-          ).length
-          const nextProgress = {
-            ...snapshot.memberProgress,
-            [member.id]: {
-              ...snapshot.memberProgress[member.id],
-              completed: true,
-            },
-          }
-
-          setMemberProgress(nextProgress)
-          setActiveMemberId(null)
-          setVnFeedback('idle')
-
-          const allCompleted = COUNCIL_MEMBERS.every((m) => nextProgress[m.id]?.completed)
-          const nextCompleted = allCompleted ? COUNCIL_MEMBERS.length : prevCompleted + 1
-
-          if (allCompleted) {
-            setIsTimerRunning(false)
-            playVictorySound()
-
-            const finalReal = snapshot.realSeconds
-            const finalPenalty = snapshot.penaltySeconds
-            const finalTotal = finalReal + finalPenalty
-            const finalErrors = Object.values(nextProgress).reduce(
-              (acc, item) => acc + item.errors,
-              0
-            )
-
-            const entry = {
-              id: `run_${Date.now()}`,
-              nome: snapshot.player?.nome || 'Colaborador Next',
-              email: snapshot.player?.email || '',
-              unidade: snapshot.player?.unidade || 'Curitiba - Matriz',
-              setor: snapshot.player?.setor || 'Geral',
-              realSeconds: finalReal,
-              penaltySeconds: finalPenalty,
-              totalSeconds: finalTotal,
-              totalErrors: finalErrors,
-              completedAt: new Date().toLocaleString('pt-BR'),
-            }
-
-            setRankingHistory((prev) => {
-              const updated = [...prev, entry].sort((a, b) => a.totalSeconds - b.totalSeconds)
-              try {
-                localStorage.setItem(RANKING_STORAGE_KEY, JSON.stringify(updated))
-              } catch {
-                // Ignora
-              }
-              return updated
-            })
-
-            triggerBlackoutTransition(() => {
-              setMazeModal({
-                mode: 'progress',
-                fromStep: prevCompleted,
-                toStep: nextCompleted,
-                memberName: member.name,
-                isFinal: true,
-              })
-            })
-          } else {
-            triggerBlackoutTransition(() => {
-              setMazeModal({
-                mode: 'progress',
-                fromStep: prevCompleted,
-                toStep: nextCompleted,
-                memberName: member.name,
-                isFinal: false,
-              })
-            })
-          }
-
-          lockRef.current = false
-          setIsLocked(false)
-        }, 2500)
-      } else {
-        // Punição: +5 segundos no cronômetro + atualização da fala dinâmica (1..5)
-        playPenaltySound()
-        setPenaltySeconds((prev) => prev + 5)
-        setPenaltyAlertKey((prev) => prev + 1)
-        setVnFeedback('wrong')
-
-        setMemberProgress((prev) => {
-          const current = prev[member.id]
-          const updatedDisabled = wrongPayload.optionId
-            ? Array.from(new Set([...current.disabledOptions, wrongPayload.optionId]))
-            : current.disabledOptions
-          const updatedTexts = wrongPayload.wrongText
-            ? Array.from(new Set([...current.wrongTextAttempts, wrongPayload.wrongText]))
-            : current.wrongTextAttempts
-
-          return {
-            ...prev,
-            [member.id]: {
-              ...current,
-              errors: current.errors + 1,
-              disabledOptions: updatedDisabled,
-              wrongTextAttempts: updatedTexts,
-            },
-          }
-        })
-
-        // Mantém os controles travados durante a animação de erro para impedir spam de cliques
-        registerTimeout(() => {
-          setVnFeedback('idle')
-          lockRef.current = false
-          setIsLocked(false)
-        }, 650)
-      }
-    },
-    [registerTimeout, triggerBlackoutTransition]
-  )
-
-  // 5A. Responder questão de Múltipla Escolha
+  // 5A. Responder questão de Múltipla Escolha (VALIDAÇÃO SERVER-SIDE NO POSTGRESQL)
   const submitMultipleChoice = useCallback(
-    (memberId, optionId) => {
+    async (memberId, optionId) => {
       if (lockRef.current) return
-      const member = COUNCIL_MEMBERS.find((m) => m.id === memberId)
+      const member = challenges.find((m) => m.id === memberId)
       const progress = memberProgress[memberId]
       if (!member || !progress || progress.completed) return
       if (progress.disabledOptions.includes(optionId)) return
 
-      // Lock imediato contra spam de cliques
+      // Lock imediato contra spam
       lockRef.current = true
       setIsLocked(true)
 
-      const selectedOption = member.options?.find((opt) => opt.id === optionId)
-      const isCorrect = Boolean(selectedOption?.isCorrect)
+      const partidaId = stateSnapshotRef.current.activePartida?.id
+      const currentRealSec = stateSnapshotRef.current.realSeconds
 
-      handleAnswerEvaluation(member, isCorrect, { optionId })
+      try {
+        // Envia resposta para validação segura no PostgreSQL
+        const resultado = await apiService.validarResposta(partidaId, {
+          membroId: memberId,
+          opcaoId: optionId,
+          segundosReais: currentRealSec,
+        })
+
+        if (resultado.acertou) {
+          playApprovalSound()
+          setVnFeedback('approved')
+
+          // Delay de 2,5s para leitura do feedback do conselheiro
+          registerTimeout(() => {
+            const snapshot = stateSnapshotRef.current
+            const prevCompleted = Object.values(snapshot.memberProgress).filter((item) => item.completed).length
+
+            const nextProgress = {
+              ...snapshot.memberProgress,
+              [member.id]: {
+                ...snapshot.memberProgress[member.id],
+                completed: true,
+              },
+            }
+
+            setMemberProgress(nextProgress)
+            setActiveMemberId(null)
+            setVnFeedback('idle')
+            setActivePartida(resultado.partida)
+
+            const allCompleted = resultado.jogoConcluido
+            const nextCompleted = resultado.etapaAtual || prevCompleted + 1
+
+            if (allCompleted) {
+              setIsTimerRunning(false)
+              playVictorySound()
+              recarregarRankings()
+
+              triggerBlackoutTransition(() => {
+                setMazeModal({
+                  mode: 'progress',
+                  fromStep: prevCompleted,
+                  toStep: nextCompleted,
+                  memberName: member.name,
+                  isFinal: true,
+                })
+              })
+            } else {
+              triggerBlackoutTransition(() => {
+                setMazeModal({
+                  mode: 'progress',
+                  fromStep: prevCompleted,
+                  toStep: nextCompleted,
+                  memberName: member.name,
+                  isFinal: false,
+                })
+              })
+            }
+
+            lockRef.current = false
+            setIsLocked(false)
+          }, 2500)
+        } else {
+          // Erro: +5 segundos de penalidade aplicados pelo backend
+          playPenaltySound()
+          setPenaltySeconds(resultado.segundosPenalidade || (resultado.partida?.segundosPenalidade ?? (penaltySeconds + 5)))
+          setPenaltyAlertKey((prev) => prev + 1)
+          setVnFeedback('wrong')
+          setActivePartida(resultado.partida)
+
+          setMemberProgress((prev) => {
+            const current = prev[member.id]
+            const updatedDisabled = Array.from(new Set([...current.disabledOptions, optionId]))
+            return {
+              ...prev,
+              [member.id]: {
+                ...current,
+                errors: current.errors + 1,
+                disabledOptions: updatedDisabled,
+              },
+            }
+          })
+
+          registerTimeout(() => {
+            setVnFeedback('idle')
+            lockRef.current = false
+            setIsLocked(false)
+          }, 650)
+        }
+      } catch (error) {
+        console.error('[GameContext] Erro ao validar resposta:', error)
+        lockRef.current = false
+        setIsLocked(false)
+      }
     },
-    [handleAnswerEvaluation, memberProgress]
+    [challenges, memberProgress, penaltySeconds, recarregarRankings, registerTimeout, triggerBlackoutTransition]
   )
 
-  // 5B. Responder questão de Input de Texto (Enigma, Senha ou Código)
+  // 5B. Responder texto/código (mantido para compatibilidade caso haja input)
   const submitTextAnswer = useCallback(
     (memberId, rawInput) => {
-      if (lockRef.current) return
-      const cleaned = String(rawInput || '').trim()
-      if (!cleaned) return
-
-      const member = COUNCIL_MEMBERS.find((m) => m.id === memberId)
-      const progress = memberProgress[memberId]
-      if (!member || !progress || progress.completed) return
-
-      // Lock imediato contra spam de cliques
-      lockRef.current = true
-      setIsLocked(true)
-
-      const normalizedUser = cleaned
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toUpperCase()
-      const normalizedExpected = String(member.correctAnswer || '')
-        .trim()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toUpperCase()
-
-      const isCorrect = normalizedUser === normalizedExpected
-      handleAnswerEvaluation(member, isCorrect, { wrongText: cleaned.toUpperCase() })
+      // Por enquanto todas as 7 cadeiras oficiais são múltipla escolha
+      console.log('submitTextAnswer:', memberId, rawInput)
     },
-    [handleAnswerEvaluation, memberProgress]
+    []
   )
 
   // 6. Reiniciar jogo a partir da Tela Final
-  const restartGame = useCallback(() => {
+  const restartGame = useCallback(async () => {
     clearAllTimeouts()
     lockRef.current = false
     setIsLocked(false)
@@ -456,18 +537,34 @@ export function GameProvider({ children }) {
     setRealSeconds(0)
     setPenaltySeconds(0)
     setPenaltyAlertKey(0)
-    setMemberProgress(createInitialMemberProgress())
+    setMemberProgress(createInitialMemberProgress(challenges))
     setActiveMemberId(null)
     setVnFeedback('idle')
     setCeoBriefingDismissed(false)
     setMazeModal(null)
-    setScreen('REGISTRATION')
-  }, [clearAllTimeouts])
+
+    // Se o jogador estiver logado, inicia uma nova partida no banco
+    if (player?.id) {
+      try {
+        const novaPartida = await apiService.iniciarPartida(player.id)
+        setActivePartida(novaPartida.partida)
+        setScreen('COMIC_INTRO')
+      } catch {
+        setScreen('REGISTRATION')
+      }
+    } else {
+      setScreen('REGISTRATION')
+    }
+  }, [challenges, clearAllTimeouts, player?.id])
 
   const value = useMemo(
     () => ({
       screen,
       player,
+      activePartida,
+      challenges,
+      authError,
+      clearAuthError,
       isTimerRunning,
       realSeconds,
       penaltySeconds,
@@ -484,12 +581,15 @@ export function GameProvider({ children }) {
       mazeModal,
       screenFadePhase,
       rankingHistory,
+      rankingSetores,
+      recarregarRankings,
       setCeoBriefingDismissed,
       openIntroMazeModal,
       confirmIntroMazeAndStart,
       openManualMazeModal,
       closeMazeModal,
       startGameFromRegistration,
+      loginAndStart,
       advanceFromComic,
       finishArrivalTransition,
       openMemberDialog,
@@ -501,6 +601,10 @@ export function GameProvider({ children }) {
     [
       screen,
       player,
+      activePartida,
+      challenges,
+      authError,
+      clearAuthError,
       isTimerRunning,
       realSeconds,
       penaltySeconds,
@@ -517,11 +621,14 @@ export function GameProvider({ children }) {
       mazeModal,
       screenFadePhase,
       rankingHistory,
+      rankingSetores,
+      recarregarRankings,
       openIntroMazeModal,
       confirmIntroMazeAndStart,
       openManualMazeModal,
       closeMazeModal,
       startGameFromRegistration,
+      loginAndStart,
       advanceFromComic,
       finishArrivalTransition,
       openMemberDialog,
@@ -534,4 +641,3 @@ export function GameProvider({ children }) {
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>
 }
-
