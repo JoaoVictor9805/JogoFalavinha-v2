@@ -9,10 +9,11 @@ function stdMat(color, roughness = 0.7, metalness = 0) {
 }
 
 /**
- * Constrói o avatar 3D do Johnny (terno azul, gravata, óculos, headset)
- * e controla a caminhada pelo percurso de 7 etapas até a sala do cliente.
+ * Constrói o avatar 3D do colaborador no labirinto (masculino ou feminino,
+ * mantendo traje corporativo, óculos e headset) e controla a caminhada pelo percurso.
  */
-export function buildJohnnyModel(initialStep = 0, { skipDrop = false } = {}) {
+export function buildJohnnyModel(initialStep = 0, { skipDrop = false, gender = 'masculino' } = {}) {
+  const isFemale = String(gender || '').trim().toLowerCase() === 'feminino'
   const route = buildRoute()
   const root = new THREE.Group()
   const body = new THREE.Group()
@@ -20,73 +21,136 @@ export function buildJohnnyModel(initialStep = 0, { skipDrop = false } = {}) {
   head.position.set(0, 0.76, 0)
 
   const legL = new THREE.Group()
-  legL.position.set(-0.07, 0.3, 0)
+  legL.position.set(isFemale ? -0.058 : -0.07, 0.3, 0)
   const legR = new THREE.Group()
-  legR.position.set(0.07, 0.3, 0)
+  legR.position.set(isFemale ? 0.058 : 0.07, 0.3, 0)
   const armL = new THREE.Group()
-  armL.position.set(-0.145, 0.58, 0)
+  armL.position.set(isFemale ? -0.128 : -0.145, 0.58, 0)
   const armR = new THREE.Group()
-  armR.position.set(0.145, 0.58, 0)
+  armR.position.set(isFemale ? 0.128 : 0.145, 0.58, 0)
 
-  const pantMat = stdMat('#1b2433')
+  const pantMat = stdMat(isFemale ? '#1c2436' : '#1b2433')
   const shoeMat = stdMat('#15110e', 0.3)
   ;[legL, legR].forEach((leg) => {
-    const legMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.048, 0.18, 6, 12), pantMat)
+    const legMesh = new THREE.Mesh(
+      new THREE.CapsuleGeometry(isFemale ? 0.041 : 0.048, 0.18, 6, 12),
+      pantMat
+    )
     legMesh.position.set(0, -0.15, 0)
     leg.add(legMesh)
-    const shoeMesh = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.05, 0.16), shoeMat)
+    const shoeMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(isFemale ? 0.082 : 0.095, 0.048, 0.155),
+      shoeMat
+    )
     shoeMesh.position.set(0, -0.285, 0.025)
     leg.add(shoeMesh)
     body.add(leg)
   })
 
-  const suitMat = stdMat('#22314a', 0.75)
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.16, 8, 16), suitMat)
+  const suitMat = stdMat(isFemale ? '#243656' : '#22314a', 0.75)
+  const torso = new THREE.Mesh(
+    new THREE.CapsuleGeometry(isFemale ? 0.094 : 0.105, 0.16, 8, 16),
+    suitMat
+  )
   torso.position.set(0, 0.46, 0)
-  torso.scale.set(1, 1, 0.78)
+  torso.scale.set(1, 1, isFemale ? 0.74 : 0.78)
   body.add(torso)
 
-  const shirt = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.17, 0.012), stdMat('#f4f4f2', 0.8))
-  shirt.position.set(0, 0.5, 0.084)
+  const shirt = new THREE.Mesh(
+    new THREE.BoxGeometry(isFemale ? 0.078 : 0.07, 0.17, 0.012),
+    stdMat('#f4f4f2', 0.8)
+  )
+  shirt.position.set(0, 0.5, isFemale ? 0.074 : 0.084)
   body.add(shirt)
 
-  const tie = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.15, 0.012), stdMat('#7A2B2B', 0.5))
-  tie.position.set(0, 0.48, 0.093)
-  body.add(tie)
+  if (isFemale) {
+    // Saia social evasê + detalhe discreto dourado na lapela
+    const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.096, 0.128, 0.14, 18), suitMat)
+    skirt.position.set(0, 0.31, 0)
+    body.add(skirt)
+
+    const lapelPin = new THREE.Mesh(
+      new THREE.SphereGeometry(0.012, 10, 8),
+      stdMat('#d99b38', 0.35, 0.65)
+    )
+    lapelPin.position.set(0.056, 0.525, 0.082)
+    body.add(lapelPin)
+  } else {
+    const tie = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.15, 0.012), stdMat('#7A2B2B', 0.5))
+    tie.position.set(0, 0.48, 0.093)
+    body.add(tie)
+  }
 
   const skinMat = stdMat(SKIN, 0.55)
   ;[armL, armR].forEach((arm) => {
-    const sleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.036, 0.19, 6, 12), suitMat)
+    const sleeve = new THREE.Mesh(
+      new THREE.CapsuleGeometry(isFemale ? 0.031 : 0.036, 0.19, 6, 12),
+      suitMat
+    )
     sleeve.position.set(0, -0.13, 0)
     arm.add(sleeve)
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.04, 14, 12), skinMat)
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(isFemale ? 0.036 : 0.04, 14, 12), skinMat)
     hand.position.set(0, -0.265, 0)
     arm.add(hand)
     body.add(arm)
   })
 
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.045, 0.05, 12), skinMat)
+  const neck = new THREE.Mesh(
+    new THREE.CylinderGeometry(isFemale ? 0.036 : 0.04, isFemale ? 0.04 : 0.045, 0.05, 12),
+    skinMat
+  )
   neck.position.set(0, 0.625, 0)
   body.add(neck)
 
   // Cabeça
   const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.135, 32, 24), stdMat(SKIN, 0.5))
-  cranium.scale.set(1, 1.06, 1)
+  cranium.scale.set(isFemale ? 0.96 : 1, 1.06, 1)
   head.add(cranium)
 
-  const hairMat = stdMat('#2a1d16', 0.9)
+  const hairMat = stdMat(isFemale ? '#3b2419' : '#2a1d16', 0.88)
   const hair = new THREE.Mesh(
-    new THREE.SphereGeometry(0.142, 32, 20, 0, Math.PI * 2, 0, Math.PI * 0.52),
+    new THREE.SphereGeometry(
+      0.143,
+      32,
+      20,
+      0,
+      Math.PI * 2,
+      0,
+      Math.PI * (isFemale ? 0.58 : 0.52)
+    ),
     hairMat
   )
   hair.position.set(0, 0.012, -0.012)
-  hair.rotation.x = -0.35
-  hair.scale.set(1, 1.04, 1)
+  hair.rotation.x = isFemale ? -0.25 : -0.35
+  hair.scale.set(isFemale ? 0.98 : 1, 1.04, 1)
   head.add(hair)
+
+  if (isFemale) {
+    // Mechas laterais e rabo de cavalo volumoso atrás para leitura nítida na câmera isométrica 3D
+    ;[-1, 1].forEach((s) => {
+      const sideLock = new THREE.Mesh(new THREE.CapsuleGeometry(0.036, 0.11, 6, 12), hairMat)
+      sideLock.position.set(s * 0.118, -0.025, 0.02)
+      sideLock.rotation.z = s * 0.14
+      head.add(sideLock)
+    })
+
+    const hairTie = new THREE.Mesh(
+      new THREE.TorusGeometry(0.038, 0.011, 8, 16),
+      stdMat('#d99b38', 0.4, 0.3)
+    )
+    hairTie.position.set(0, 0.018, -0.142)
+    hairTie.rotation.x = 0.3
+    head.add(hairTie)
+
+    const ponytail = new THREE.Mesh(new THREE.CapsuleGeometry(0.056, 0.16, 8, 14), hairMat)
+    ponytail.position.set(0, -0.07, -0.168)
+    ponytail.rotation.x = 0.28
+    head.add(ponytail)
+  }
 
   ;[-1, 1].forEach((s) => {
     const ear = new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 10), skinMat)
-    ear.position.set(s * 0.133, -0.005, 0)
+    ear.position.set(s * (isFemale ? 0.128 : 0.133), -0.005, 0)
     ear.scale.set(0.5, 1, 0.8)
     head.add(ear)
 
@@ -94,9 +158,19 @@ export function buildJohnnyModel(initialStep = 0, { skipDrop = false } = {}) {
     eye.position.set(s * 0.05, 0.012, 0.122)
     head.add(eye)
 
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.011, 0.012), hairMat)
+    if (isFemale) {
+      const lash = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.005, 0.006), stdMat('#0d0d0d', 0.3))
+      lash.position.set(s * 0.064, 0.02, 0.122)
+      lash.rotation.z = s * 0.3
+      head.add(lash)
+    }
+
+    const brow = new THREE.Mesh(
+      new THREE.BoxGeometry(isFemale ? 0.044 : 0.05, isFemale ? 0.008 : 0.011, 0.012),
+      hairMat
+    )
     brow.position.set(s * 0.05, 0.05, 0.12)
-    brow.rotation.z = s * -0.12
+    brow.rotation.z = s * (isFemale ? -0.18 : -0.12)
     head.add(brow)
 
     const frame = new THREE.Mesh(
@@ -120,8 +194,8 @@ export function buildJohnnyModel(initialStep = 0, { skipDrop = false } = {}) {
   head.add(nose)
 
   const smile = new THREE.Mesh(
-    new THREE.TorusGeometry(0.032, 0.0055, 8, 14, Math.PI),
-    stdMat('#6b2a2a', 0.5)
+    new THREE.TorusGeometry(0.03, 0.0055, 8, 14, Math.PI),
+    stdMat(isFemale ? '#a84250' : '#6b2a2a', 0.45)
   )
   smile.position.set(0, -0.058, 0.122)
   smile.rotation.z = Math.PI

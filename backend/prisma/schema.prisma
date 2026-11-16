@@ -14,6 +14,7 @@ model Jogador {
   email        String     @unique
   unidade      String
   setor        String
+  genero       String     @default("masculino") // "masculino" | "feminino"
   senha        String?    // Senha simples para login (hash adicionado na Fase 7)
   criadoEm     DateTime   @default(now()) @map("criado_em")
   atualizadoEm DateTime   @updatedAt @map("atualizado_em")

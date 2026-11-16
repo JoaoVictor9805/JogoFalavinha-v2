@@ -9,7 +9,7 @@ const router = Router()
  */
 router.post('/cadastrar', async (req, res) => {
   try {
-    const { nome, email, unidade, setor, senha } = req.body
+    const { nome, email, unidade, setor, genero, senha } = req.body
 
     if (!nome?.trim() || !email?.trim() || !String(senha || '').trim()) {
       return res.status(400).json({
@@ -18,6 +18,8 @@ router.post('/cadastrar', async (req, res) => {
     }
 
     const emailNormalizado = email.trim().toLowerCase()
+    const generoNormalizado =
+      String(genero || '').trim().toLowerCase() === 'feminino' ? 'feminino' : 'masculino'
 
     // Verifica se já existe um jogador cadastrado com este e-mail
     const jogadorExistente = await prisma.jogador.findUnique({
@@ -36,6 +38,7 @@ router.post('/cadastrar', async (req, res) => {
         email: emailNormalizado,
         unidade: unidade?.trim() || 'Curitiba - Matriz',
         setor: setor?.trim() || 'Geral',
+        genero: generoNormalizado,
         senha: String(senha).trim(),
       },
       select: {
@@ -44,6 +47,7 @@ router.post('/cadastrar', async (req, res) => {
         email: true,
         unidade: true,
         setor: true,
+        genero: true,
         criadoEm: true,
       },
     })
@@ -113,6 +117,7 @@ router.post('/login', async (req, res) => {
         email: jogador.email,
         unidade: jogador.unidade,
         setor: jogador.setor,
+        genero: jogador.genero || 'masculino',
       },
       partidaEmAndamento: partidaAtiva,
     })

@@ -3,6 +3,7 @@ import { Check, Compass, Loader2, Play, Trophy, X } from 'lucide-react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { useGame } from '../../context/gameContextInstance'
 import { buildClientRoom } from './buildClientRoom'
 import { buildJohnnyModel } from './buildJohnnyModel'
 import { buildMazeStructure } from './buildMazeStructure'
@@ -47,7 +48,7 @@ function detectWebGL() {
   }
 }
 
-function MazeViewport({ initialStep, targetStep, animateIntro }) {
+function MazeViewport({ initialStep, targetStep, animateIntro, gender = 'masculino' }) {
   const containerRef = useRef(null)
   const [webglUnavailable, setWebglUnavailable] = useState(() => !detectWebGL())
   const [isSceneReady, setIsSceneReady] = useState(false)
@@ -55,6 +56,7 @@ function MazeViewport({ initialStep, targetStep, animateIntro }) {
   const initialStepRef = useRef(initialStep)
   const targetStepRef = useRef(targetStep)
   const animateIntroRef = useRef(animateIntro)
+  const genderRef = useRef(gender)
   const worldRef = useRef(null)
 
   const stepAudioRef = useRef(null)
@@ -141,7 +143,10 @@ function MazeViewport({ initialStep, targetStep, animateIntro }) {
       const skipIntroAnim = !animateIntroRef.current
       const structure = buildMazeStructure(world, { skipRise: skipIntroAnim })
       const room = buildClientRoom()
-      const johnny = buildJohnnyModel(initialStepRef.current, { skipDrop: skipIntroAnim })
+      const johnny = buildJohnnyModel(initialStepRef.current, {
+        skipDrop: skipIntroAnim,
+        gender: genderRef.current,
+      })
       scene.add(structure.group, room.group, johnny.group)
 
       const studioGround = new THREE.Mesh(
@@ -369,8 +374,10 @@ function MazeViewport({ initialStep, targetStep, animateIntro }) {
  *  - 'manual': aberto sob demanda pelo botão "Visualizar Mapa", fechado pelo botão "X"
  */
 function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
+  const { player } = useGame()
   const { mode, fromStep, toStep, memberName, isFinal } = modalState
   const [displayedStep, setDisplayedStep] = useState(fromStep)
+  const avatarGender = player?.genero || 'masculino'
 
   useEffect(() => {
     if (toStep <= fromStep) return undefined
@@ -479,9 +486,11 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
           <div className="relative w-full h-[290px] sm:h-[380px] bg-[#EAE1CF] border-b-2 border-stone-900 overflow-hidden">
             <WebGLBoundary step={displayedStep}>
               <MazeViewport
+                key={avatarGender}
                 initialStep={fromStep}
                 targetStep={displayedStep}
                 animateIntro={isIntro}
+                gender={avatarGender}
               />
             </WebGLBoundary>
           </div>

@@ -240,6 +240,7 @@ export function GameProvider({ children }) {
           email: formData.email,
           unidade: formData.unidade,
           setor: formData.setor,
+          genero: formData.genero || 'masculino',
           senha: formData.senha || null,
         })
 

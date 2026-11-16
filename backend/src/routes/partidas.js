@@ -49,7 +49,7 @@ router.post('/iniciar', async (req, res) => {
         include: {
           opcoesDesabilitadas: true,
           jogador: {
-            select: { id: true, nome: true, email: true, unidade: true, setor: true },
+            select: { id: true, nome: true, email: true, unidade: true, setor: true, genero: true },
           },
         },
         orderBy: { iniciadoEm: 'desc' },
@@ -69,7 +69,7 @@ router.post('/iniciar', async (req, res) => {
         include: {
           opcoesDesabilitadas: true,
           jogador: {
-            select: { id: true, nome: true, email: true, unidade: true, setor: true },
+            select: { id: true, nome: true, email: true, unidade: true, setor: true, genero: true },
           },
         },
       })
@@ -176,7 +176,7 @@ router.get('/:id', async (req, res) => {
       include: {
         opcoesDesabilitadas: true,
         jogador: {
-          select: { id: true, nome: true, email: true, unidade: true, setor: true },
+          select: { id: true, nome: true, email: true, unidade: true, setor: true, genero: true },
         },
       },
     })
@@ -284,7 +284,7 @@ router.post('/:id/validar', async (req, res) => {
         include: {
           opcoesDesabilitadas: true,
           jogador: {
-            select: { id: true, nome: true, email: true, unidade: true, setor: true },
+            select: { id: true, nome: true, email: true, unidade: true, setor: true, genero: true },
           },
         },
       })
@@ -343,7 +343,7 @@ router.post('/:id/validar', async (req, res) => {
       include: {
         opcoesDesabilitadas: true,
         jogador: {
-          select: { id: true, nome: true, email: true, unidade: true, setor: true },
+          select: { id: true, nome: true, email: true, unidade: true, setor: true, genero: true },
         },
       },
     })

@@ -22,6 +22,7 @@ function RegistrationScreen() {
     nome: player?.nome || '',
     email: player?.email || '',
     senha: '',
+    genero: player?.genero || 'masculino',
     unidade: player?.unidade || UNITS_LIST[0],
     setor: player?.setor || DEPARTMENTS_LIST[0],
   })
@@ -219,6 +220,40 @@ function RegistrationScreen() {
                   disabled={isLocked || isSubmitting}
                   className="w-full pl-10 pr-4 py-3 rounded-none bg-white border-2 border-stone-300 text-stone-900 placeholder-stone-400 text-sm font-semibold focus:outline-none focus:border-[#D99B38] transition-colors"
                 />
+              </div>
+            </div>
+
+            <div>
+              <span className="block text-[11px] font-black uppercase tracking-[0.16em] text-stone-800 mb-1.5">
+                Gênero (Avatar no Labirinto) *
+              </span>
+              <div className="grid grid-cols-2 border-2 border-stone-900 bg-stone-200">
+                {[
+                  { value: 'masculino', label: 'Masculino' },
+                  { value: 'feminino', label: 'Feminino' },
+                ].map((opt, idx) => {
+                  const isSelected = registerForm.genero === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      disabled={isLocked || isSubmitting}
+                      aria-pressed={isSelected}
+                      onClick={() =>
+                        setRegisterForm((prev) => ({ ...prev, genero: opt.value }))
+                      }
+                      className={`py-2.5 px-3 text-xs font-black uppercase tracking-[0.14em] transition-all cursor-pointer disabled:opacity-50 ${
+                        idx > 0 ? 'border-l-2 border-stone-900' : ''
+                      } ${
+                        isSelected
+                          ? 'bg-[#D99B38] text-stone-950 shadow-inner'
+                          : 'bg-white text-stone-600 hover:bg-[#F5F0E6] hover:text-stone-900'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
