@@ -71,10 +71,10 @@ export const COMIC_PANELS = [
 ]
 
 export const CEO_TRIBUNAL_BRIEFING = {
-  name: 'CEO · Presidente do Conselho',
-  title: 'Abertura da Sessão do Tribunal',
+  name: 'Jhonny',
+  title: 'CEO · Presidente do Conselho',
   message:
-    'Bem-vindo ao Conselho Next! Diante de você estão as 7 lideranças da empresa, e você pode escolhê-las em qualquer ordem. A cada resposta correta, o Johnny avança uma etapa pelo labirinto 3D rumo à sala do cliente — e você verá cada passo dele no mapa. Mas cuidado: cada erro adiciona +5 segundos ao seu tempo. Clique em avançar para conhecer o labirinto e começar!',
+    'Bem-vindo ao Conselho Next! Diante de você estão as 7 lideranças da empresa, e você pode escolhê-las em qualquer ordem. A cada resposta correta, o colaborador avança uma etapa pelo labirinto 3D rumo à sala do cliente — e você verá cada passo dele no mapa. Mas cuidado: cada erro adiciona +5 segundos ao seu tempo. Clique em avançar para conhecer o labirinto e começar!',
 }
 
 /**

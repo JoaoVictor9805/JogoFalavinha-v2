@@ -15,11 +15,12 @@
 }
 
 @keyframes vnShake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-8px); }
-  40% { transform: translateX(8px); }
-  60% { transform: translateX(-5px); }
-  80% { transform: translateX(5px); }
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  18% { transform: translateX(-10px) rotate(-1.4deg); }
+  36% { transform: translateX(9px) rotate(1.2deg); }
+  54% { transform: translateX(-6px) rotate(-0.8deg); }
+  72% { transform: translateX(6px) rotate(0.6deg); }
+  90% { transform: translateX(-2px) rotate(-0.2deg); }
 }
 
 @keyframes progressShrink {
@@ -33,19 +34,77 @@
 }
 
 @keyframes vnIdleBreathe {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-3px) scale(1.008); }
+  0%, 100% {
+    transform: translateY(0) translateX(0) rotate(0deg) scale(1);
+  }
+  35% {
+    transform: translateY(-3px) translateX(1.5px) rotate(0.35deg) scale(1.008);
+  }
+  70% {
+    transform: translateY(-1.5px) translateX(-1.5px) rotate(-0.35deg) scale(1.004);
+  }
 }
 
-@keyframes vnTalkBob {
-  0%, 100% { transform: translateY(0) scale(1); }
-  50% { transform: translateY(-5px) scale(1.015); }
+@keyframes vnTalkOrganic {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg) scale(1, 1);
+  }
+  24% {
+    transform: translateY(-5px) rotate(-0.75deg) scale(1.012, 1.02);
+  }
+  52% {
+    transform: translateY(-1.5px) rotate(0.4deg) scale(1.004, 0.996);
+  }
+  78% {
+    transform: translateY(-6px) rotate(0.85deg) scale(1.015, 1.024);
+  }
+}
+
+@keyframes vnPoseImpulse {
+  0% {
+    transform: translateY(3px) scale(0.986, 0.976);
+  }
+  45% {
+    transform: translateY(-5px) scale(1.016, 1.026);
+  }
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
 }
 
 @keyframes vnApproveNod {
   0% { transform: translateY(0) scale(1); }
-  40% { transform: translateY(-7px) scale(1.035); }
-  100% { transform: translateY(0) scale(1.02); }
+  35% { transform: translateY(-5px) scale(1.025); }
+  70% { transform: translateY(1px) scale(1.01); }
+  100% { transform: translateY(0) scale(1.015); }
+}
+
+@keyframes vnStampSlam {
+  0% {
+    opacity: 0;
+    transform: translateY(-18px) scale(2.15) rotate(-14deg);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(2px) scale(0.93) rotate(-3deg);
+  }
+  82% {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.03) rotate(-5.5deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(-4.5deg);
+  }
+}
+
+@keyframes vnTensionPulse {
+  0%, 100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 @keyframes vnCaretBlink {
@@ -129,19 +188,27 @@
 }
 
 .animate-vn-shake {
-  animation: vnShake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  animation: vnShake 0.45s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
 .animate-vn-idle {
-  animation: vnIdleBreathe 3.4s ease-in-out infinite;
+  animation: vnIdleBreathe 3.8s ease-in-out infinite;
 }
 
 .animate-vn-talk {
-  animation: vnTalkBob 0.28s ease-in-out infinite;
+  animation: vnTalkOrganic 0.54s ease-in-out infinite;
+}
+
+.animate-vn-pose-pop {
+  animation: vnPoseImpulse 0.21s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-vn-approve {
-  animation: vnApproveNod 0.5s ease-out forwards;
+  animation: vnApproveNod 0.55s ease-out forwards;
+}
+
+.animate-vn-stamp {
+  animation: vnStampSlam 0.32s cubic-bezier(0.18, 1.25, 0.4, 1) forwards;
 }
 
 .animate-vn-caret {
@@ -182,4 +249,31 @@
 
 .animate-maze-enter {
   animation: mazeEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.pixel-art {
+  image-rendering: pixelated;
+}
+
+/* Nível 2 de erro: vinheta avermelhada leve na tela */
+.vn-screen-tension-2 {
+  background: radial-gradient(
+    circle at 50% 50%,
+    transparent 52%,
+    rgba(220, 38, 38, 0.11) 82%,
+    rgba(185, 28, 28, 0.22) 100%
+  );
+  box-shadow: inset 0 0 70px rgba(220, 38, 38, 0.2);
+}
+
+/* Nível 3+ de erro: vermelho mais marcado e pulsante nas bordas da tela */
+.vn-screen-tension-3 {
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(220, 38, 38, 0.04) 38%,
+    rgba(220, 38, 38, 0.18) 76%,
+    rgba(153, 27, 27, 0.38) 100%
+  );
+  box-shadow: inset 0 0 120px rgba(185, 28, 28, 0.42);
+  animation: vnTensionPulse 2s ease-in-out infinite;
 }

@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, useState } from 'react'
-import { Check, Compass, Play, Trophy, X } from 'lucide-react'
+import { Check, Compass, Loader2, Play, Trophy, X } from 'lucide-react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
@@ -50,6 +50,7 @@ function detectWebGL() {
 function MazeViewport({ initialStep, targetStep, animateIntro }) {
   const containerRef = useRef(null)
   const [webglUnavailable, setWebglUnavailable] = useState(() => !detectWebGL())
+  const [isSceneReady, setIsSceneReady] = useState(false)
 
   const initialStepRef = useRef(initialStep)
   const targetStepRef = useRef(targetStep)
@@ -99,192 +100,209 @@ function MazeViewport({ initialStep, targetStep, animateIntro }) {
     let controls
     let observer
     let rafId = 0
+    let initRafId = 0
+    let disposed = false
+    let scene
 
-    try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
-    } catch {
-      Promise.resolve().then(() => setWebglUnavailable(true))
-      return undefined
-    }
+    // Aguarda 1 frame para o navegador pintar o indicador de loading antes da inicialização pesada do WebGL
+    initRafId = requestAnimationFrame(() => {
+      if (disposed || !containerRef.current) return
 
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
-    renderer.shadowMap.enabled = true
-    renderer.shadowMap.type = THREE.PCFShadowMap
-    renderer.toneMapping = THREE.ACESFilmicToneMapping
-    renderer.toneMappingExposure = 1.1
-    renderer.domElement.style.display = 'block'
-    renderer.domElement.style.width = '100%'
-    renderer.domElement.style.height = '100%'
-    container.appendChild(renderer.domElement)
-
-    const scene = new THREE.Scene()
-    scene.background = new THREE.Color(SCENE_BG)
-    scene.fog = new THREE.Fog(SCENE_BG, 55, 130)
-
-    pmrem = new THREE.PMREMGenerator(renderer)
-    const roomEnv = new RoomEnvironment()
-    envRT = pmrem.fromScene(roomEnv, 0.04)
-    scene.environment = envRT.texture
-    roomEnv.dispose()
-
-    const world = createWorldState()
-    worldRef.current = world
-
-    const skipIntroAnim = !animateIntroRef.current
-    const structure = buildMazeStructure(world, { skipRise: skipIntroAnim })
-    const room = buildClientRoom()
-    const johnny = buildJohnnyModel(initialStepRef.current, { skipDrop: skipIntroAnim })
-    scene.add(structure.group, room.group, johnny.group)
-
-    const studioGround = new THREE.Mesh(
-      new THREE.PlaneGeometry(80, 80),
-      new THREE.MeshStandardMaterial({ color: GROUND_BG, roughness: 0.96, metalness: 0 })
-    )
-    studioGround.rotation.x = -Math.PI / 2
-    studioGround.position.set(1.5, -0.31, 0)
-    studioGround.receiveShadow = true
-    scene.add(studioGround)
-
-    const pulseMat = new THREE.MeshBasicMaterial({
-      map: ringTexture('34,197,94', 28),
-      transparent: true,
-      opacity: 0,
-      depthWrite: false,
-    })
-    const pulseMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), pulseMat)
-    pulseMesh.rotation.x = -Math.PI / 2
-    pulseMesh.visible = false
-    scene.add(pulseMesh)
-
-    const hemi = new THREE.HemisphereLight('#fffbf2', '#7a6c5d', 0.95)
-    scene.add(hemi)
-
-    const dirLight = new THREE.DirectionalLight('#fff2df', 2.8)
-    dirLight.position.set(-4.5, 9, 5.5)
-    dirLight.castShadow = true
-    dirLight.shadow.mapSize.set(1024, 1024)
-    dirLight.shadow.camera.left = -9
-    dirLight.shadow.camera.right = 11
-    dirLight.shadow.camera.top = 8
-    dirLight.shadow.camera.bottom = -8
-    dirLight.shadow.camera.near = 1
-    dirLight.shadow.camera.far = 30
-    dirLight.shadow.bias = -0.0004
-    dirLight.shadow.normalBias = 0.02
-    scene.add(dirLight)
-
-    const errorRedLight = new THREE.PointLight('#ff2a2a', 0, 16, 2)
-    errorRedLight.position.set(1.5, 3.2, 0.5)
-    scene.add(errorRedLight)
-
-    const camera = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.5, 160)
-    camera.position.set(-5.8, 8.6, 10.6)
-
-    controls = new OrbitControls(camera, renderer.domElement)
-    controls.enablePan = false
-    controls.enableZoom = false
-    controls.enableDamping = true
-    controls.dampingFactor = 0.08
-    controls.minPolarAngle = 0.45
-    controls.maxPolarAngle = 1.18
-    controls.minAzimuthAngle = -1.4
-    controls.maxAzimuthAngle = 0.25
-    controls.target.copy(structure.center)
-
-    const fitCamera = () => {
-      const w = Math.max(1, container.clientWidth)
-      const h = Math.max(1, container.clientHeight)
-      renderer.setSize(w, h, false)
-      camera.aspect = w / h
-
-      const vHalf = THREE.MathUtils.degToRad(BASE_FOV) / 2
-      const hHalf = Math.atan(Math.tan(vHalf) * camera.aspect)
-      const dist = Math.min(45, Math.max(7.4 / Math.tan(hHalf), 4.6 / Math.tan(vHalf)))
-      const dir = camera.position.clone().sub(controls.target).normalize()
-      camera.position.copy(controls.target.clone().addScaledVector(dir, dist))
-      camera.updateProjectionMatrix()
-      controls.update()
-    }
-
-    fitCamera()
-    observer = new ResizeObserver(fitCamera)
-    observer.observe(container)
-
-    const desiredTarget = new THREE.Vector3()
-    const deltaTarget = new THREE.Vector3()
-    let mountMs = null
-    let prevMs = null
-
-    const onFootstep = () => {
-      const audio = stepAudioRef.current
-      if (!audio) return
-      audio.currentTime = 0
-      audio.play().catch(() => {})
-    }
-
-    const animate = () => {
-      rafId = requestAnimationFrame(animate)
-      const nowMs = performance.now()
-      if (mountMs === null) {
-        mountMs = nowMs
-        prevMs = nowMs
+      try {
+        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+      } catch {
+        setWebglUnavailable(true)
+        return
       }
-      const dt = Math.max(0, Math.min((nowMs - prevMs) / 1000, 0.05))
-      prevMs = nowMs
-      const elapsedSec = Math.max(0, (nowMs - mountMs) / 1000)
 
-      structure.update(elapsedSec, dt)
-      room.update(elapsedSec, nowMs, world)
-      johnny.update(dt, nowMs, targetStepRef.current, world, {
-        onFootstep,
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+      renderer.shadowMap.enabled = true
+      renderer.shadowMap.type = THREE.PCFShadowMap
+      renderer.toneMapping = THREE.ACESFilmicToneMapping
+      renderer.toneMappingExposure = 1.1
+      renderer.domElement.style.display = 'block'
+      renderer.domElement.style.width = '100%'
+      renderer.domElement.style.height = '100%'
+      container.appendChild(renderer.domElement)
+
+      scene = new THREE.Scene()
+      scene.background = new THREE.Color(SCENE_BG)
+      scene.fog = new THREE.Fog(SCENE_BG, 55, 130)
+
+      pmrem = new THREE.PMREMGenerator(renderer)
+      const roomEnv = new RoomEnvironment()
+      envRT = pmrem.fromScene(roomEnv, 0.04)
+      scene.environment = envRT.texture
+      roomEnv.dispose()
+
+      const world = createWorldState()
+      worldRef.current = world
+
+      const skipIntroAnim = !animateIntroRef.current
+      const structure = buildMazeStructure(world, { skipRise: skipIntroAnim })
+      const room = buildClientRoom()
+      const johnny = buildJohnnyModel(initialStepRef.current, { skipDrop: skipIntroAnim })
+      scene.add(structure.group, room.group, johnny.group)
+
+      const studioGround = new THREE.Mesh(
+        new THREE.PlaneGeometry(80, 80),
+        new THREE.MeshStandardMaterial({ color: GROUND_BG, roughness: 0.96, metalness: 0 })
+      )
+      studioGround.rotation.x = -Math.PI / 2
+      studioGround.position.set(1.5, -0.31, 0)
+      studioGround.receiveShadow = true
+      scene.add(studioGround)
+
+      const pulseMat = new THREE.MeshBasicMaterial({
+        map: ringTexture('34,197,94', 28),
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
       })
+      const pulseMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), pulseMat)
+      pulseMesh.rotation.x = -Math.PI / 2
+      pulseMesh.visible = false
+      scene.add(pulseMesh)
 
-      const pulseAge = (nowMs - world.successAt) / 1000
-      if (world.successAt > 0 && pulseAge <= 1.1) {
-        pulseMesh.visible = true
-        const k = pulseAge / 1.1
-        const sc = 0.5 + k * 3.0
-        pulseMesh.position.set(world.pos.x, 0.025, world.pos.z)
-        pulseMesh.scale.set(sc, sc, sc)
-        pulseMat.opacity = (1 - k * k) * 0.95
-      } else {
-        pulseMesh.visible = false
-      }
+      const hemi = new THREE.HemisphereLight('#fffbf2', '#7a6c5d', 0.95)
+      scene.add(hemi)
 
-      const { e, k: errK } = errorIntensity(world, nowMs)
-      errorRedLight.intensity = errK > 0 ? (0.5 + 0.5 * Math.sin(e * 22)) * 55 * errK : 0
+      const dirLight = new THREE.DirectionalLight('#fff2df', 2.8)
+      dirLight.position.set(-4.5, 9, 5.5)
+      dirLight.castShadow = true
+      dirLight.shadow.mapSize.set(1024, 1024)
+      dirLight.shadow.camera.left = -9
+      dirLight.shadow.camera.right = 11
+      dirLight.shadow.camera.top = 8
+      dirLight.shadow.camera.bottom = -8
+      dirLight.shadow.camera.near = 1
+      dirLight.shadow.camera.far = 30
+      dirLight.shadow.bias = -0.0004
+      dirLight.shadow.normalBias = 0.02
+      scene.add(dirLight)
 
-      let fov = BASE_FOV
-      if (animateIntroRef.current) {
-        const introK = Math.min(1, elapsedSec / 1.8)
-        fov += (1 - (1 - Math.pow(1 - introK, 3))) * 14
-      }
-      fov += Math.sin(e * 45) * 0.5 * errK
-      if (world.successAt > 0 && pulseAge < 0.6) {
-        fov -= Math.sin((Math.PI * pulseAge) / 0.6) * 1.1
-      }
-      if (Math.abs(camera.fov - fov) > 0.005) {
-        camera.fov = fov
+      const errorRedLight = new THREE.PointLight('#ff2a2a', 0, 16, 2)
+      errorRedLight.position.set(1.5, 3.2, 0.5)
+      scene.add(errorRedLight)
+
+      const camera = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.5, 160)
+      camera.position.set(-5.8, 8.6, 10.6)
+
+      controls = new OrbitControls(camera, renderer.domElement)
+      controls.enablePan = false
+      controls.enableZoom = false
+      controls.enableDamping = true
+      controls.dampingFactor = 0.08
+      controls.minPolarAngle = 0.45
+      controls.maxPolarAngle = 1.18
+      controls.minAzimuthAngle = -1.4
+      controls.maxAzimuthAngle = 0.25
+      controls.target.copy(structure.center)
+
+      const fitCamera = () => {
+        const w = Math.max(1, container.clientWidth)
+        const h = Math.max(1, container.clientHeight)
+        renderer.setSize(w, h, false)
+        camera.aspect = w / h
+
+        const vHalf = THREE.MathUtils.degToRad(BASE_FOV) / 2
+        const hHalf = Math.atan(Math.tan(vHalf) * camera.aspect)
+        const dist = Math.min(45, Math.max(7.4 / Math.tan(hHalf), 4.6 / Math.tan(vHalf)))
+        const dir = camera.position.clone().sub(controls.target).normalize()
+        camera.position.copy(controls.target.clone().addScaledVector(dir, dist))
         camera.updateProjectionMatrix()
+        controls.update()
       }
 
-      desiredTarget.copy(structure.center).lerp(world.pos, 0.14)
-      deltaTarget.copy(controls.target).lerp(desiredTarget, 0.04).sub(controls.target)
-      camera.position.add(deltaTarget)
-      controls.target.add(deltaTarget)
-      controls.update()
+      fitCamera()
+      observer = new ResizeObserver(fitCamera)
+      observer.observe(container)
 
-      renderer.render(scene, camera)
-    }
+      const desiredTarget = new THREE.Vector3()
+      const deltaTarget = new THREE.Vector3()
+      let mountMs = null
+      let prevMs = null
+      let firstFrameRendered = false
 
-    rafId = requestAnimationFrame(animate)
+      const onFootstep = () => {
+        const audio = stepAudioRef.current
+        if (!audio) return
+        audio.currentTime = 0
+        audio.play().catch(() => {})
+      }
+
+      const animate = () => {
+        if (disposed) return
+        rafId = requestAnimationFrame(animate)
+        const nowMs = performance.now()
+        if (mountMs === null) {
+          mountMs = nowMs
+          prevMs = nowMs
+        }
+        const dt = Math.max(0, Math.min((nowMs - prevMs) / 1000, 0.05))
+        prevMs = nowMs
+        const elapsedSec = Math.max(0, (nowMs - mountMs) / 1000)
+
+        structure.update(elapsedSec, dt)
+        room.update(elapsedSec, nowMs, world)
+        johnny.update(dt, nowMs, targetStepRef.current, world, {
+          onFootstep,
+        })
+
+        const pulseAge = (nowMs - world.successAt) / 1000
+        if (world.successAt > 0 && pulseAge <= 1.1) {
+          pulseMesh.visible = true
+          const k = pulseAge / 1.1
+          const sc = 0.5 + k * 3.0
+          pulseMesh.position.set(world.pos.x, 0.025, world.pos.z)
+          pulseMesh.scale.set(sc, sc, sc)
+          pulseMat.opacity = (1 - k * k) * 0.95
+        } else {
+          pulseMesh.visible = false
+        }
+
+        const { e, k: errK } = errorIntensity(world, nowMs)
+        errorRedLight.intensity = errK > 0 ? (0.5 + 0.5 * Math.sin(e * 22)) * 55 * errK : 0
+
+        let fov = BASE_FOV
+        if (animateIntroRef.current) {
+          const introK = Math.min(1, elapsedSec / 1.8)
+          fov += (1 - (1 - Math.pow(1 - introK, 3))) * 14
+        }
+        fov += Math.sin(e * 45) * 0.5 * errK
+        if (world.successAt > 0 && pulseAge < 0.6) {
+          fov -= Math.sin((Math.PI * pulseAge) / 0.6) * 1.1
+        }
+        if (Math.abs(camera.fov - fov) > 0.005) {
+          camera.fov = fov
+          camera.updateProjectionMatrix()
+        }
+
+        desiredTarget.copy(structure.center).lerp(world.pos, 0.14)
+        deltaTarget.copy(controls.target).lerp(desiredTarget, 0.04).sub(controls.target)
+        camera.position.add(deltaTarget)
+        controls.target.add(deltaTarget)
+        controls.update()
+
+        renderer.render(scene, camera)
+
+        if (!firstFrameRendered) {
+          firstFrameRendered = true
+          setIsSceneReady(true)
+        }
+      }
+
+      rafId = requestAnimationFrame(animate)
+    })
 
     return () => {
+      disposed = true
+      cancelAnimationFrame(initRafId)
       cancelAnimationFrame(rafId)
       observer?.disconnect()
       controls?.dispose()
 
-      scene.traverse((obj) => {
+      scene?.traverse((obj) => {
         if (obj.geometry) obj.geometry.dispose()
         if (obj.material) {
           const mats = Array.isArray(obj.material) ? obj.material : [obj.material]
@@ -315,11 +333,36 @@ function MazeViewport({ initialStep, targetStep, animateIntro }) {
     )
   }
 
-  return <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+  return (
+    <div className="relative w-full h-full">
+      <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+
+      {/* Feedback visual de carregamento até o primeiro frame 3D ser renderizado */}
+      <div
+        aria-live="polite"
+        aria-hidden={isSceneReady}
+        className={`absolute inset-0 z-10 bg-[#EAE1CF] flex flex-col items-center justify-center gap-3.5 px-6 text-center transition-opacity duration-300 ${
+          isSceneReady ? 'opacity-0 pointer-events-none' : 'opacity-100 pointer-events-auto'
+        }`}
+      >
+        <div className="w-12 h-12 bg-[#FDFBF7] border-2 border-stone-900 shadow-[4px_4px_0px_#1C1917] flex items-center justify-center text-[#B87D1E]">
+          <Loader2 className="w-6 h-6 animate-spin" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-xs sm:text-sm font-black uppercase tracking-[0.18em] text-stone-900">
+            Carregando Maquete 3D...
+          </p>
+          <p className="text-[11px] font-mono text-stone-600">
+            Preparando iluminação e cenário do labirinto
+          </p>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 /**
- * Modal sobreposto com a maquete 3D do Labirinto do Johnny.
+ * Modal sobreposto com a maquete 3D do Labirinto do Colaborador.
  * Modos:
  *  - 'intro': mostrado após a explicação do CEO; exige confirmação em "OK · Iniciar Desafio"
  *  - 'progress': exibido automaticamente quando o jogador acerta uma questão, animando o avanço
@@ -362,17 +405,17 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
   const headline = isIntro
     ? 'Mapa Corporativo até a Sala do Cliente'
     : isFinal
-      ? 'Johnny Chegou à Porta do Cliente!'
+      ? 'O Colaborador Chegou à Porta do Cliente!'
       : isProgress
         ? `${memberName || 'Conselheiro'} aprovou sua resposta!`
         : 'Visão Geral do Percurso 3D'
 
   const description = isIntro
-    ? 'A cada conselheiro aprovado, o Johnny avança uma etapa por esses corredores até alcançar a sala do cliente.'
+    ? 'A cada conselheiro aprovado, o colaborador avança uma etapa por esses corredores até alcançar a sala do cliente.'
     : isFinal
-      ? 'Todos os 7 conselheiros foram convencidos e o Johnny cruzou a porta final.'
+      ? 'Todos os 7 conselheiros foram convencidos e o colaborador cruzou a porta final.'
       : isProgress
-        ? `Johnny avançou para a etapa ${toStep} de ${MAZE_STEPS}. Faltam ${MAZE_STEPS - toStep} ${
+        ? `O colaborador avançou para a etapa ${toStep} de ${MAZE_STEPS}. Faltam ${MAZE_STEPS - toStep} ${
             MAZE_STEPS - toStep === 1 ? 'conselheiro' : 'conselheiros'
           }.`
         : 'Arraste o mouse sobre a maquete para girar o ângulo de visão.'

@@ -54,7 +54,7 @@ model Partida {
 model Desafio {
   id                Int            @id // 1 a 7
   codigo            String         // M1 a M7
-  nome              String         // Valdir, Ramon, Vanessa, etc.
+  nome              String         // André / Sapo, Ramon, Vanessa, etc.
   cargo             String
   rotuloCurto       String         @map("rotulo_curto")
   posicaoMesa       String         @map("posicao_mesa")

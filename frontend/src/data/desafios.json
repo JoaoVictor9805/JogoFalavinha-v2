@@ -22,9 +22,9 @@
       ]
     },
     "labirinto": {
-      "avatarNome": "Johnny",
+      "avatarNome": "Colaborador",
       "destinoLabel": "Porta do Cliente",
-      "mensagemInicial": "Johnny aguarda seus acertos para avançar pelo percurso até a porta do cliente."
+      "mensagemInicial": "O colaborador aguarda seus acertos para avançar pelo percurso até a porta do cliente."
     },
     "cadastro": {
       "titulo": "Identificação do Participante",
@@ -83,7 +83,7 @@
     },
     "conclusao": {
       "titulo": "Escape Room Concluído!",
-      "subtitulo": "Parabéns! Você superou todos os desafios e levou o Johnny até a porta do cliente.",
+      "subtitulo": "Parabéns! Você superou todos os desafios e levou o colaborador até a porta do cliente.",
       "textoBotaoRanking": "Ver Ranking Completo",
       "textoBotaoJogarNovamente": "Jogar Novamente"
     }
@@ -158,7 +158,7 @@
       },
       "progressoLabirinto": {
         "checkpointLabel": "Unidades",
-        "mensagemAvanco": "Johnny avançou na primeira etapa!"
+        "mensagemAvanco": "O colaborador avançou na primeira etapa!"
       }
     },
     {
@@ -231,7 +231,7 @@
       },
       "progressoLabirinto": {
         "checkpointLabel": "Valores",
-        "mensagemAvanco": "Johnny avançou pelo corredor central."
+        "mensagemAvanco": "O colaborador avançou pelo corredor central."
       }
     },
     {
@@ -304,7 +304,7 @@
       },
       "progressoLabirinto": {
         "checkpointLabel": "Ser Next",
-        "mensagemAvanco": "Johnny avançou mais uma etapa no labirinto."
+        "mensagemAvanco": "O colaborador avançou mais uma etapa no labirinto."
       }
     },
     {
@@ -377,7 +377,7 @@
       },
       "progressoLabirinto": {
         "checkpointLabel": "Eventos",
-        "mensagemAvanco": "Metade do caminho vencida! Johnny segue firme no percurso."
+        "mensagemAvanco": "Metade do caminho vencida! O colaborador segue firme no percurso."
       }
     },
     {
@@ -450,7 +450,7 @@
       },
       "progressoLabirinto": {
         "checkpointLabel": "Ponto",
-        "mensagemAvanco": "Johnny avançou pela quinta etapa do labirinto."
+        "mensagemAvanco": "O colaborador avançou pela quinta etapa do labirinto."
       }
     },
     {
@@ -596,7 +596,7 @@
       },
       "progressoLabirinto": {
         "checkpointLabel": "Dress Code",
-        "mensagemAvanco": "Johnny cruzou a porta do cliente! Escape Room concluído!"
+        "mensagemAvanco": "O colaborador cruzou a porta do cliente! Escape Room concluído!"
       }
     }
   ]

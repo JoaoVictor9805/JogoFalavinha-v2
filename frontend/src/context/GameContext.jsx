@@ -387,30 +387,33 @@ export function GameProvider({ children }) {
     })
   }, [triggerBlackoutTransition])
 
-  // Abre o modal do mapa manualmente
+  // Abre o modal do mapa manualmente (sem fade para preto)
   const openManualMazeModal = useCallback(() => {
+    if (lockRef.current) return
     playSelectSound()
-    triggerBlackoutTransition(() => {
-      const done = Object.values(stateSnapshotRef.current.memberProgress).filter((m) => m.completed).length
-      setMazeModal({ mode: 'manual', fromStep: done, toStep: done })
-    })
-  }, [triggerBlackoutTransition])
+    const done = Object.values(stateSnapshotRef.current.memberProgress).filter((m) => m.completed).length
+    setMazeModal({ mode: 'manual', fromStep: done, toStep: done })
+  }, [])
 
-  // Fecha o modal de progresso
+  // Fecha o modal do mapa (fade para preto apenas na transição final para o Ranking)
   const closeMazeModal = useCallback(() => {
     playSelectSound()
     const isFinalTransition = mazeModal?.mode === 'progress' && mazeModal?.isFinal
-    triggerBlackoutTransition(() => {
-      setMazeModal(null)
-      if (isFinalTransition) {
+
+    if (isFinalTransition) {
+      triggerBlackoutTransition(() => {
+        setMazeModal(null)
         setJustFinished(true)
         setScreen('FINAL_RANKING')
         recarregarRankings()
         if (player?.id) {
           carregarHistoricoTentativas(player.id)
         }
-      }
-    })
+      })
+      return
+    }
+
+    setMazeModal(null)
   }, [carregarHistoricoTentativas, mazeModal, player, recarregarRankings, triggerBlackoutTransition])
 
   // Avançar da Comic Strip para a Transição
@@ -514,24 +517,20 @@ export function GameProvider({ children }) {
                 carregarHistoricoTentativas(jogadorId)
               }
 
-              triggerBlackoutTransition(() => {
-                setMazeModal({
-                  mode: 'progress',
-                  fromStep: prevCompleted,
-                  toStep: nextCompleted,
-                  memberName: member.name,
-                  isFinal: true,
-                })
+              setMazeModal({
+                mode: 'progress',
+                fromStep: prevCompleted,
+                toStep: nextCompleted,
+                memberName: member.name,
+                isFinal: true,
               })
             } else {
-              triggerBlackoutTransition(() => {
-                setMazeModal({
-                  mode: 'progress',
-                  fromStep: prevCompleted,
-                  toStep: nextCompleted,
-                  memberName: member.name,
-                  isFinal: false,
-                })
+              setMazeModal({
+                mode: 'progress',
+                fromStep: prevCompleted,
+                toStep: nextCompleted,
+                memberName: member.name,
+                isFinal: false,
               })
             }
 
@@ -571,7 +570,7 @@ export function GameProvider({ children }) {
         setIsLocked(false)
       }
     },
-    [carregarHistoricoTentativas, challenges, memberProgress, penaltySeconds, player?.id, recarregarRankings, registerTimeout, triggerBlackoutTransition]
+    [carregarHistoricoTentativas, challenges, memberProgress, penaltySeconds, player?.id, recarregarRankings, registerTimeout]
   )
 
   // 5B. Responder texto/código (mantido para compatibilidade caso haja input)

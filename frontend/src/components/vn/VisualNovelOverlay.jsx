@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
+  AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   ChevronsRight,
@@ -43,12 +44,14 @@ import cutout7EdPose2 from '../../assets/ed/cutout-7-ed-pose2.png'
 import cutout7EdPose3 from '../../assets/ed/cutout-7-ed-pose3.png'
 import cutout7EdWrong from '../../assets/ed/cutout-7-ed-wrong.png'
 import cutout7EdSuccess from '../../assets/ed/cutout-7-ed-success.png'
+import tribunalMesaSoloImg from '../../assets/outros/tribunal-mesa-solo.png'
 import { useGame } from '../../context/gameContextInstance'
-import { CEO_TRIBUNAL_BRIEFING, getErrorDialogue } from '../../data/conselhoNextData'
+import { CEO_TRIBUNAL_BRIEFING, COUNCIL_MEMBERS, getErrorDialogue } from '../../data/conselhoNextData'
 import { useTypewriter } from '../../hooks/useTypewriter'
 import { playDialogueBlipSound } from '../../utils/soundEffects'
 
-const POSE_SWITCH_INTERVAL_MS = 2000
+const POSE_SWITCH_TYPING_MS = 1100
+const POSE_SWITCH_IDLE_MS = 2800
 const WRONG_POSE_DURATION_MS = 2000
 
 const MEMBER_CUTOUTS = {
@@ -89,6 +92,70 @@ const MEMBER_CUTOUTS = {
   },
 }
 
+/**
+ * Paletas visuais estilo Ace Attorney para cada Conselheiro + CEO.
+ * Garante identidade própria (plaquinha da bancada e etiqueta de fala)
+ * mesmo quando os desafios vêm do backend.
+ */
+const MEMBER_VN_THEMES = {
+  ceo: {
+    code: 'CEO',
+    role: CEO_TRIBUNAL_BRIEFING.title,
+    tagBg: 'bg-[#D99B38] text-stone-950 border-stone-900',
+    plateAccent: 'border-t-[#D99B38]',
+    plateText: 'text-[#D99B38]',
+  },
+  1: {
+    code: 'C01',
+    role: 'Cadeira 01 · Estrutura & Unidades',
+    tagBg: 'bg-sky-400 text-stone-950 border-stone-900',
+    plateAccent: 'border-t-sky-400',
+    plateText: 'text-sky-300',
+  },
+  2: {
+    code: 'C02',
+    role: 'Cadeira 02 · Cultura & Valores',
+    tagBg: 'bg-teal-400 text-stone-950 border-stone-900',
+    plateAccent: 'border-t-teal-400',
+    plateText: 'text-teal-300',
+  },
+  3: {
+    code: 'C03',
+    role: 'Cadeira 03 · Propósito Next',
+    tagBg: 'bg-amber-400 text-stone-950 border-stone-900',
+    plateAccent: 'border-t-amber-400',
+    plateText: 'text-amber-300',
+  },
+  4: {
+    code: 'C04',
+    role: 'Cadeira 04 · Endomarketing & Eventos',
+    tagBg: 'bg-purple-400 text-stone-950 border-stone-900',
+    plateAccent: 'border-t-purple-400',
+    plateText: 'text-purple-300',
+  },
+  5: {
+    code: 'C05',
+    role: 'Cadeira 05 · Rotina & Ponto',
+    tagBg: 'bg-rose-400 text-stone-950 border-stone-900',
+    plateAccent: 'border-t-rose-400',
+    plateText: 'text-rose-300',
+  },
+  6: {
+    code: 'C06',
+    role: 'Cadeira 06 · Tecnologia & ERP',
+    tagBg: 'bg-cyan-400 text-stone-950 border-stone-900',
+    plateAccent: 'border-t-cyan-400',
+    plateText: 'text-cyan-300',
+  },
+  7: {
+    code: 'C07',
+    role: 'Cadeira 07 · Imagem & Dress Code',
+    tagBg: 'bg-emerald-400 text-stone-950 border-stone-900',
+    plateAccent: 'border-t-emerald-400',
+    plateText: 'text-emerald-300',
+  },
+}
+
 function VisualNovelOverlay({ isCeoIntro = false }) {
   const {
     activeMember,
@@ -103,9 +170,21 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
 
   const [textValue, setTextValue] = useState('')
   const [poseIndex, setPoseIndex] = useState(0)
+  const [isFlipped, setIsFlipped] = useState(false)
+  const [posePulseKey, setPosePulseKey] = useState(0)
   const [prevFeedback, setPrevFeedback] = useState(vnFeedback)
   const [isShowingWrongPose, setIsShowingWrongPose] = useState(false)
   const [selectedOptionId, setSelectedOptionId] = useState(null)
+  const [hoveredOptionId, setHoveredOptionId] = useState(null)
+  const [spotlightDismissed, setSpotlightDismissed] = useState(false)
+
+  const posesOnCurrentSideRef = useRef(0)
+  const overlayRef = useRef(null)
+  const speechBoxRef = useRef(null)
+  const stageRef = useRef(null)
+  const questionRef = useRef(null)
+  const spotlightRectsRef = useRef(null)
+  const flipTimeoutRef = useRef(null)
 
   if (vnFeedback !== prevFeedback) {
     setPrevFeedback(vnFeedback)
@@ -120,16 +199,28 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     const timer = setTimeout(() => {
       setIsShowingWrongPose(false)
       setPoseIndex(0)
+      setPosePulseKey((prev) => prev + 1)
     }, WRONG_POSE_DURATION_MS)
 
     return () => clearTimeout(timer)
   }, [isShowingWrongPose])
 
   const memberId = activeMember?.id
+  const scopeKey = isCeoIntro ? 'ceo' : memberId || 0
+  const [prevScopeKey, setPrevScopeKey] = useState(scopeKey)
+
+  if (scopeKey !== prevScopeKey) {
+    setPrevScopeKey(scopeKey)
+    setSelectedOptionId(null)
+    setHoveredOptionId(null)
+    setPoseIndex(0)
+    setIsFlipped(false)
+    setSpotlightDismissed(false)
+  }
 
   useEffect(() => {
-    setSelectedOptionId(null)
-  }, [memberId])
+    posesOnCurrentSideRef.current = 0
+  }, [scopeKey])
 
   const progress = (memberId && memberProgress[memberId]) || {
     completed: false,
@@ -137,6 +228,10 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     disabledOptions: [],
     wrongTextAttempts: [],
   }
+
+  const localMemberMeta = memberId
+    ? COUNCIL_MEMBERS.find((m) => m.id === memberId)
+    : null
 
   const dynamicErrorSpeech = !isCeoIntro ? getErrorDialogue(progress.errors) : null
   const isApprovedState = !isCeoIntro && vnFeedback === 'approved'
@@ -152,47 +247,199 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
 
   const memberConfig = memberId ? MEMBER_CUTOUTS[memberId] : null
   const counselorPoses = isCeoIntro
-    ? [cutout4JhonnyPose1]
+    ? MEMBER_CUTOUTS[4].default
     : isApprovedState && memberConfig?.success
       ? [memberConfig.success]
       : isShowingWrongPose && memberConfig?.wrong
         ? [memberConfig.wrong]
-        : memberConfig?.default || [cutout4JhonnyPose1]
+        : memberConfig?.default || MEMBER_CUTOUTS[4].default
   const activePoseCount = counselorPoses.length
-
-  useEffect(() => {
-    if (activePoseCount <= 1) return undefined
-
-    const timer = setInterval(() => {
-      setPoseIndex((prev) => (prev + 1) % activePoseCount)
-    }, POSE_SWITCH_INTERVAL_MS)
-
-    return () => clearInterval(timer)
-  }, [activePoseCount])
 
   const currentSpeech = isCeoIntro
     ? CEO_TRIBUNAL_BRIEFING.message
     : !activeMember
       ? ''
       : isApprovedState
-        ? activeMember.approvalMessage
-        : dynamicErrorSpeech || activeMember.greeting
+        ? activeMember.approvalMessage || localMemberMeta?.approvalMessage || ''
+        : dynamicErrorSpeech || activeMember.greeting || localMemberMeta?.greeting || ''
 
-  const handleTypeChar = useCallback((idx) => {
-    if (idx % 3 === 1) {
-      playDialogueBlipSound(idx)
-    }
-  }, [])
+  const speakerKey = isCeoIntro ? 'ceo' : memberId || 'ceo'
 
-  const { displayedText, isTyping, skip } = useTypewriter(currentSpeech, {
+  const handleTypeChar = useCallback(
+    (idx, ch) => {
+      if (idx % 3 === 1 || /[?!]/.test(ch)) {
+        playDialogueBlipSound(idx, speakerKey, ch)
+      }
+    },
+    [speakerKey]
+  )
+
+  const { displayedText, isTyping, isSpeaking, skip } = useTypewriter(currentSpeech, {
     speed: 22,
     triggerKey: isCeoIntro ? 'ceo-intro' : `${memberId || 0}-${speechMode}-${progress.errors}`,
     onCharacter: handleTypeChar,
   })
 
+  // Troca de pose moderada durante a fala (1100ms) e mais espaçada em idle (2800ms),
+  // com micro-impulso e chance de flipar horizontalmente apenas após um bloco de trocas do mesmo lado.
+  const poseIntervalMs = isTyping ? POSE_SWITCH_TYPING_MS : POSE_SWITCH_IDLE_MS
+
+  useEffect(() => {
+    if (activePoseCount <= 1) return undefined
+
+    const timer = setInterval(() => {
+      setPoseIndex((prev) => {
+        const step = activePoseCount > 2 && Math.random() < 0.32 ? 2 : 1
+        return (prev + step) % activePoseCount
+      })
+      setPosePulseKey((prev) => prev + 1)
+
+      posesOnCurrentSideRef.current += 1
+      const minPosesBeforeFlip = isTyping ? 3 : 2
+      const flipChance = isTyping ? 0.38 : 0.45
+
+      if (posesOnCurrentSideRef.current >= minPosesBeforeFlip && Math.random() < flipChance) {
+        setIsFlipped((prev) => !prev)
+        posesOnCurrentSideRef.current = 0
+      }
+    }, poseIntervalMs)
+
+    return () => clearInterval(timer)
+  }, [activePoseCount, poseIntervalMs, isTyping])
+
+  // "Câmera Viva": Foco centralizado apenas na fala inicial de abertura (greeting sem erros ou intro do CEO)
+  const isOpeningSpeech =
+    (isCeoIntro || (speechMode === 'greeting' && progress.errors === 0)) && !isApprovedState
+  const isIntroSpotlight = isOpeningSpeech && isTyping && !spotlightDismissed
+
+  const prevSpotlightRef = useRef(isIntroSpotlight)
+
+  const captureSpotlightRects = useCallback(() => {
+    if (typeof window === 'undefined' || window.innerWidth >= 1024) return
+    if (!stageRef.current || !questionRef.current) return
+    spotlightRectsRef.current = {
+      stageTop: stageRef.current.getBoundingClientRect().top,
+      questionTop: questionRef.current.getBoundingClientRect().top,
+    }
+  }, [])
+
+  // Mantém as coordenadas atualizadas enquanto o spotlight está ativo no celular
+  useEffect(() => {
+    if (!isIntroSpotlight) return undefined
+    captureSpotlightRects()
+
+    const observer =
+      typeof ResizeObserver !== 'undefined' && speechBoxRef.current
+        ? new ResizeObserver(() => captureSpotlightRects())
+        : null
+    if (observer && speechBoxRef.current) {
+      observer.observe(speechBoxRef.current)
+    }
+    window.addEventListener('resize', captureSpotlightRects)
+
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', captureSpotlightRects)
+    }
+  }, [isIntroSpotlight, captureSpotlightRects])
+
+  // Transição FLIP suave no celular quando o spotlight termina: personagem desliza para baixo e pergunta desliza para cima
+  useLayoutEffect(() => {
+    const wasSpotlight = prevSpotlightRef.current
+    prevSpotlightRef.current = isIntroSpotlight
+
+    if (!wasSpotlight || isIntroSpotlight) return undefined
+    if (typeof window === 'undefined' || window.innerWidth >= 1024) return undefined
+
+    const prev = spotlightRectsRef.current
+    const stageEl = stageRef.current
+    const questionEl = questionRef.current
+    if (!prev || !stageEl || !questionEl) return undefined
+
+    const nextStageTop = stageEl.getBoundingClientRect().top
+    const nextQuestionTop = questionEl.getBoundingClientRect().top
+    const dyStage = prev.stageTop - nextStageTop
+    const dyQuestion = prev.questionTop - nextQuestionTop
+
+    if (flipTimeoutRef.current) clearTimeout(flipTimeoutRef.current)
+
+    stageEl.style.transition = 'none'
+    stageEl.style.transform = `translate3d(0, ${dyStage}px, 0) scale(1.05)`
+
+    questionEl.style.transition = 'none'
+    questionEl.style.transform = `translate3d(0, ${dyQuestion}px, 0) scale(0.97)`
+    questionEl.style.opacity = '0.2'
+
+    void stageEl.offsetHeight
+
+    const rafId = requestAnimationFrame(() => {
+      stageEl.style.transition = 'transform 560ms cubic-bezier(0.22, 1, 0.36, 1)'
+      stageEl.style.transform = 'translate3d(0, 0, 0) scale(1)'
+
+      questionEl.style.transition =
+        'transform 560ms cubic-bezier(0.22, 1, 0.36, 1), opacity 480ms ease-out, max-height 520ms cubic-bezier(0.22, 1, 0.36, 1)'
+      questionEl.style.transform = 'translate3d(0, 0, 0) scale(1)'
+      questionEl.style.opacity = '1'
+
+      if (overlayRef.current && overlayRef.current.scrollTop > 8) {
+        overlayRef.current.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+    })
+
+    flipTimeoutRef.current = setTimeout(() => {
+      stageEl.style.transition = ''
+      stageEl.style.transform = ''
+      questionEl.style.transition = ''
+      questionEl.style.transform = ''
+      questionEl.style.opacity = ''
+    }, 600)
+
+    return () => {
+      cancelAnimationFrame(rafId)
+    }
+  }, [isIntroSpotlight])
+
+  useEffect(() => {
+    return () => {
+      if (flipTimeoutRef.current) clearTimeout(flipTimeoutRef.current)
+    }
+  }, [])
+
+  const handleSkipOrDismissSpotlight = useCallback(() => {
+    captureSpotlightRects()
+    if (isTyping) {
+      skip()
+    }
+    setSpotlightDismissed(true)
+  }, [captureSpotlightRects, isTyping, skip])
+
+  // Atalho global de teclado (Espaço / Enter) para pular a fala inicial sem perder tempo no cronômetro
+  useEffect(() => {
+    if (!isTyping && !isIntroSpotlight) return undefined
+
+    const handleGlobalKeyDown = (e) => {
+      const tag = document.activeElement?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault()
+        handleSkipOrDismissSpotlight()
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [isTyping, isIntroSpotlight, handleSkipOrDismissSpotlight])
+
   if (!isCeoIntro && !activeMember) return null
 
-  const speakerName = isCeoIntro ? CEO_TRIBUNAL_BRIEFING.name : activeMember.name
+  const speakerName = isCeoIntro
+    ? CEO_TRIBUNAL_BRIEFING.name
+    : activeMember.name || localMemberMeta?.name || 'Conselheiro'
+
+  const theme = MEMBER_VN_THEMES[speakerKey] || MEMBER_VN_THEMES.ceo
+  const speakerRole = isCeoIntro
+    ? CEO_TRIBUNAL_BRIEFING.title
+    : activeMember.role || localMemberMeta?.role || theme.role
 
   const handleTextSubmit = (e) => {
     e.preventDefault()
@@ -206,35 +453,85 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     ? 'bg-emerald-600 text-white border-stone-900'
     : speechMode === 'error'
       ? 'bg-red-600 text-white border-stone-900'
-      : 'bg-[#D99B38] text-stone-950 border-stone-900'
+      : theme.tagBg
+
+  const isOptionHovered = Boolean(hoveredOptionId) && !isApprovedState && !isShowingWrongPose
 
   const portraitReactionClass = isWrongShake
     ? 'animate-vn-shake drop-shadow-[0_0_26px_rgba(220,38,38,0.48)]'
     : isApprovedState
       ? 'animate-vn-approve drop-shadow-[0_0_28px_rgba(16,185,129,0.4)]'
-      : isTyping
+      : isSpeaking
         ? 'animate-vn-talk drop-shadow-[0_14px_24px_rgba(28,25,23,0.2)]'
         : 'animate-vn-idle drop-shadow-[0_14px_24px_rgba(28,25,23,0.16)]'
 
-  const auraClass = isWrongShake
-    ? 'bg-red-500/20'
+  // No estado de erro ou aprovação, garante orientação original sem espelhamento
+  const effectiveFlipped =
+    isShowingWrongPose || isApprovedState ? false : isFlipped
+
+  // Tensão progressiva na tela (1º erro = só reação do personagem; 2º erro = vermelho leve; 3º+ = vermelho marcado)
+  const screenTensionLevel =
+    isCeoIntro || isApprovedState
+      ? 0
+      : progress.errors >= 3
+        ? 3
+        : progress.errors === 2
+          ? 2
+          : 0
+
+  // Transformação da "Câmera Viva" no conjunto Personagem + Bancada
+  const stageCameraTransformClass = isIntroSpotlight
+    ? 'scale-[1.05] lg:translate-x-[34%] lg:scale-[1.09] z-30'
     : isApprovedState
-      ? 'bg-emerald-500/20'
-      : 'bg-[#D99B38]/15'
+      ? 'lg:translate-x-2 lg:scale-[1.02] z-20'
+      : isShowingWrongPose
+        ? 'lg:scale-[1.02] z-20'
+        : isOptionHovered
+          ? 'lg:translate-x-2 lg:rotate-[0.55deg] lg:scale-[1.02] z-20'
+          : 'translate-x-0 scale-100 z-20'
 
   return (
     <div
+      ref={overlayRef}
       className="fixed inset-0 z-40 bg-[#F5F0E6] text-stone-900 flex flex-col overflow-y-auto animate-overlay-enter"
       role="dialog"
       aria-modal="true"
       aria-label={speakerName}
     >
-      {/* Topo: Caixa de Falas estilo Pokémon / Ace Attorney */}
+      {/* Camada de Tensão Progressiva na Tela (apenas a partir do 2º erro, preservando cliques) */}
+      {screenTensionLevel > 0 && (
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none fixed inset-0 z-30 transition-opacity duration-500 ${
+            screenTensionLevel >= 3 ? 'vn-screen-tension-3' : 'vn-screen-tension-2'
+          }`}
+        />
+      )}
+
+      {/* Backdrop do Modo Foco ("Câmera Viva") durante a fala inicial de cada conselheiro */}
       <div
-        className={`w-full max-w-6xl mx-auto px-4 sm:px-8 shrink-0 animate-panel-rise ${
-          isCeoIntro ? 'pt-8 sm:pt-12' : 'pt-20 sm:pt-22'
+        aria-hidden={!isIntroSpotlight}
+        onClick={isIntroSpotlight ? handleSkipOrDismissSpotlight : undefined}
+        className={`fixed inset-0 z-20 bg-stone-950/70 backdrop-blur-[2px] transition-opacity duration-500 ${
+          isIntroSpotlight
+            ? 'opacity-100 cursor-pointer pointer-events-auto'
+            : 'opacity-0 pointer-events-none'
+        }`}
+      />
+
+      {/* Wrapper único centralizado verticalmente: mantém a disposição compacta da tela menor também em monitores grandes */}
+      <div
+        className={`w-full my-auto ${
+          isCeoIntro ? 'pt-6 sm:pt-10 pb-8' : 'pt-16 sm:pt-[72px] pb-8 sm:pb-10'
         }`}
       >
+        {/* Topo: Caixa de Falas estilo Pokémon / Ace Attorney */}
+        <div
+          ref={speechBoxRef}
+          className={`w-full max-w-6xl mx-auto px-4 sm:px-8 shrink-0 animate-panel-rise relative z-30 transition-transform duration-500 ease-out ${
+            isIntroSpotlight ? 'lg:scale-[1.02] lg:translate-y-1' : 'scale-100 translate-y-0'
+          }`}
+        >
         <div className="flex items-end justify-between gap-4">
           <div
             className={`inline-flex items-center gap-2 px-4 py-1 text-xs font-black uppercase tracking-widest border-2 border-b-0 relative z-10 ml-3 transition-colors duration-200 ${speakerTagClass}`}
@@ -244,6 +541,12 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
               <>
                 <span className="opacity-70">·</span>
                 <span>+{progress.errors * 5}s</span>
+                {progress.errors >= 2 && (
+                  <span className="inline-flex items-center gap-1 ml-1 px-1.5 py-0.2 bg-stone-950/85 text-red-200 text-[10px]">
+                    <AlertTriangle className="w-3 h-3 text-red-400" />
+                    <span>{progress.errors >= 3 ? 'TENSÃO MÁXIMA' : 'SOB PRESSÃO'}</span>
+                  </span>
+                )}
               </>
             )}
           </div>
@@ -265,40 +568,42 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
         <div
           role="button"
           tabIndex={0}
-          onClick={() => {
-            if (isTyping) skip()
-          }}
+          onClick={handleSkipOrDismissSpotlight}
           onKeyDown={(e) => {
-            if ((e.key === 'Enter' || e.key === ' ') && isTyping) {
+            if ((e.key === 'Enter' || e.key === ' ') && (isTyping || isIntroSpotlight)) {
               e.preventDefault()
-              skip()
+              handleSkipOrDismissSpotlight()
             }
           }}
           aria-label="Fala do personagem. Clique para completar o texto."
-          className={`relative bg-[#FDFBF7] border-2 px-5 sm:px-6 py-4 shadow-[6px_6px_0px_#1C1917] transition-colors duration-200 ${
-            isApprovedState
-              ? 'border-emerald-600'
-              : speechMode === 'error'
-                ? 'border-red-600'
-                : 'border-stone-900'
-          } ${isTyping ? 'cursor-pointer' : 'cursor-default'}`}
+          className={`relative bg-[#FDFBF7] border-2 px-5 sm:px-6 py-3.5 sm:py-4 transition-all duration-300 ${
+            isIntroSpotlight
+              ? 'shadow-[0_18px_48px_rgba(0,0,0,0.6)] border-[#D99B38]'
+              : isApprovedState
+                ? 'border-emerald-600 shadow-[6px_6px_0px_#1C1917]'
+                : speechMode === 'error'
+                  ? 'border-red-600 shadow-[6px_6px_0px_#1C1917]'
+                  : 'border-stone-900 shadow-[6px_6px_0px_#1C1917]'
+          } ${isTyping || isIntroSpotlight ? 'cursor-pointer' : 'cursor-default'}`}
         >
-          <p className="text-base sm:text-lg font-semibold text-stone-900 leading-relaxed min-h-[3rem] pr-8">
+          <p className="text-base sm:text-lg font-semibold text-stone-900 leading-relaxed min-h-[2.75rem] pr-8">
             “{displayedText}”
             {isTyping && (
               <span className="inline-block w-2 h-4 ml-1 align-middle bg-[#D99B38] animate-vn-caret" />
             )}
           </p>
 
-          <div className="mt-2 flex items-center justify-between gap-4 text-[11px] font-mono">
+          <div className="mt-1.5 flex items-center justify-between gap-4 text-[11px] font-mono">
             <span className="text-stone-500">
               {isApprovedState
                 ? 'Registrando aprovação no Tribunal...'
-                : isTyping
-                  ? 'Clique na caixa para exibir tudo'
-                  : isCeoIntro
-                    ? 'Clique em "Iniciar Desafio" abaixo para começar'
-                    : 'Selecione ou digite sua resposta abaixo'}
+                : isIntroSpotlight
+                  ? 'Modo Foco: clique em qualquer lugar (ou Espaço) para ir direto à pergunta'
+                  : isTyping
+                    ? 'Clique na caixa para exibir tudo'
+                    : isCeoIntro
+                      ? 'Clique em "Ver Labirinto & Começar" abaixo para iniciar'
+                      : 'Selecione sua resposta ao lado'}
             </span>
 
             <span
@@ -321,48 +626,128 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
           </div>
 
           {isApprovedState && (
-            <div className="mt-2.5 w-full h-1.5 bg-[#EBE4D5] overflow-hidden border border-emerald-600">
+            <div className="absolute inset-x-0 bottom-0 h-1.5 bg-[#EBE4D5] overflow-hidden border-t border-emerald-600">
               <div className="h-full bg-emerald-600 animate-reading-bar" />
             </div>
           )}
         </div>
       </div>
 
-      {/* Mesma horizontal: Imagem viva alinhada à base da caixa de perguntas à esquerda + Caixa de perguntas/ação à direita */}
-      <main className="flex-1 flex items-start lg:items-center">
-        <div className="max-w-6xl w-full mx-auto px-4 sm:px-8 pt-4 pb-16 sm:pb-20 lg:pt-6 lg:pb-10 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-10 lg:items-end">
-          {/* Esquerda: Recorte alinhado ao final da caixa de pergunta, com aura sutil e respiração */}
-          <div className="lg:col-span-5 lg:self-end flex justify-center items-end pt-2 pb-0 order-2 lg:order-1 animate-portrait-enter relative">
+      {/* Palco Principal: Conselheiro + Bancada à esquerda | Pergunta e Alternativas à direita */}
+      <main className="relative mt-5 sm:mt-6">
+        <div className="max-w-6xl w-full mx-auto px-4 sm:px-8 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 lg:items-end">
+          {/* Esquerda (desktop) / Acima no foco inicial do celular e abaixo após a fala */}
+          <div
+            ref={stageRef}
+            onClick={isIntroSpotlight ? handleSkipOrDismissSpotlight : undefined}
+            className={`lg:col-span-5 lg:self-end relative transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] origin-bottom ${
+              isIntroSpotlight ? 'order-1 lg:order-1 cursor-pointer' : 'order-2 lg:order-1'
+            } ${stageCameraTransformClass}`}
+          >
+            <div className="flex flex-col items-center justify-end pt-1 pb-0 animate-portrait-enter">
+            {/* Recorte do Personagem (z-10, posicionado atrás da bancada) */}
             <div
-              className={`pointer-events-none absolute bottom-4 w-72 h-72 rounded-full blur-3xl transition-colors duration-500 ${auraClass}`}
-            />
-            <div
-              className={`relative inline-flex justify-center items-end origin-bottom select-none pointer-events-none ${portraitReactionClass}`}
+              className={`relative z-10 inline-flex justify-center items-end origin-bottom select-none pointer-events-none ${portraitReactionClass}`}
             >
-              {counselorPoses.map((poseSrc, idx) => {
-                const isActive = idx === poseIndex % counselorPoses.length
-                return (
-                  <img
-                    key={poseSrc}
-                    src={poseSrc}
-                    alt={idx === 0 ? speakerName : ''}
-                    aria-hidden={idx > 0}
-                    draggable={false}
-                    className={`h-[280px] sm:h-[360px] lg:h-[clamp(400px,56vh,540px)] w-auto object-contain object-bottom saturate-[1.06] contrast-[1.03] ${
-                      idx === 0 ? 'relative' : 'absolute inset-0 w-full h-full'
-                    } ${isActive ? 'opacity-100' : 'opacity-0'}`}
-                  />
-                )
-              })}
+              {/* Wrapper de micro-impulso disparado a cada troca de pose */}
+              <div
+                key={posePulseKey}
+                className="animate-vn-pose-pop origin-bottom inline-flex justify-center items-end"
+              >
+                {/* Wrapper de Flip Horizontal (intervalo maior) */}
+                <div
+                  className={`origin-center transition-transform duration-150 ${
+                    effectiveFlipped ? '-scale-x-100' : 'scale-x-100'
+                  }`}
+                >
+                  {counselorPoses.map((poseSrc, idx) => {
+                    const isActive = idx === poseIndex % counselorPoses.length
+                    return (
+                      <img
+                        key={poseSrc}
+                        src={poseSrc}
+                        alt={idx === 0 ? speakerName : ''}
+                        aria-hidden={idx > 0}
+                        draggable={false}
+                        className={`h-[235px] sm:h-[295px] lg:h-[318px] w-auto object-contain object-bottom saturate-[1.06] contrast-[1.03] ${
+                          idx === 0 ? 'relative' : 'absolute inset-0 w-full h-full'
+                        } ${isActive ? 'opacity-100' : 'opacity-0'}`}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Bancada Individual adaptada de tribunal-mesa.png (z-20, cobrindo o corte abaixo da cintura) */}
+            <div className="relative z-20 -mt-[46px] sm:-mt-[58px] lg:-mt-[72px] w-[300px] sm:w-[370px] lg:w-[430px] max-w-full select-none pointer-events-none">
+              <img
+                src={tribunalMesaSoloImg}
+                alt=""
+                aria-hidden="true"
+                draggable={false}
+                className="w-full h-auto block pixel-art drop-shadow-[0_14px_22px_rgba(28,25,23,0.45)]"
+              />
+
+              {/* Plaquinha de Identificação na frente da Bancada */}
+              <div
+                className={`absolute left-1/2 -translate-x-1/2 bottom-[18%] w-[64%] sm:w-[60%] bg-stone-950/95 border-2 border-stone-900 border-t-[3px] ${theme.plateAccent} px-3 py-1.5 shadow-[3px_3px_0px_rgba(0,0,0,0.65)] flex items-center justify-between gap-2`}
+              >
+                <div className="min-w-0">
+                  <div
+                    className={`text-[10px] sm:text-[11px] font-black uppercase tracking-[0.16em] truncate ${theme.plateText}`}
+                  >
+                    {speakerName}
+                  </div>
+                  <div className="text-[9px] sm:text-[10px] font-semibold text-stone-300 truncate">
+                    {speakerRole}
+                  </div>
+                </div>
+                <span className="px-1.5 py-0.5 bg-stone-900 border border-stone-700 font-mono text-[9px] font-black text-stone-300 shrink-0">
+                  {theme.code}
+                </span>
+              </div>
+
+              {/* Badge/Carimbo Animado estilo Ace Attorney na frente da mesa (Acerto / Erro) */}
+              {isShowingWrongPose && (
+                <div
+                  key={`wrong-stamp-${progress.errors}`}
+                  className="absolute -top-4 right-2 sm:right-4 z-30 animate-vn-stamp"
+                >
+                  <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-red-600 text-white border-2 border-stone-950 shadow-[4px_4px_0px_#1C1917] font-black text-xs sm:text-sm uppercase tracking-[0.16em]">
+                    <XCircle className="w-4 h-4 shrink-0" />
+                    <span>OBJEÇÃO! +5s</span>
+                  </div>
+                </div>
+              )}
+
+              {isApprovedState && (
+                <div
+                  key="approved-stamp"
+                  className="absolute -top-4 right-2 sm:right-4 z-30 animate-vn-stamp"
+                >
+                  <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 text-white border-2 border-stone-950 shadow-[4px_4px_0px_#1C1917] font-black text-xs sm:text-sm uppercase tracking-[0.16em]">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>APROVADO!</span>
+                  </div>
+                </div>
+              )}
+            </div>
             </div>
           </div>
 
-          {/* Direita: Botão "Ver Mapa e Iniciar" (quando for o CEO) ou Pergunta e Alternativas/Input */}
+          {/* Direita (desktop) / Abaixo durante o foco inicial no celular e acima após a fala */}
           <section
-            className={`lg:col-span-7 space-y-5 order-1 lg:order-2 animate-modal-pop ${
+            ref={questionRef}
+            className={`lg:col-span-7 transition-[opacity,transform,filter,max-height] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
               isCeoIntro ? 'lg:self-center' : 'lg:self-end'
+            } ${
+              isIntroSpotlight
+                ? 'order-2 lg:order-2 opacity-20 scale-[0.97] blur-[1px] max-lg:max-h-[180px] max-lg:overflow-hidden pointer-events-none z-10'
+                : 'order-1 lg:order-2 opacity-100 scale-100 blur-0 max-lg:max-h-[950px] pointer-events-auto z-20'
             }`}
           >
+            <div className="space-y-5 animate-modal-pop">
             {isCeoIntro ? (
               <div className="bg-[#FDFBF7] border-2 border-stone-900 p-6 sm:p-8 shadow-[6px_6px_0px_#1C1917] space-y-5">
                 <div className="border-l-4 border-[#D99B38] pl-4 space-y-1">
@@ -380,6 +765,8 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                 <button
                   type="button"
                   onClick={openIntroMazeModal}
+                  onMouseEnter={() => setHoveredOptionId('ceo-start')}
+                  onMouseLeave={() => setHoveredOptionId(null)}
                   className="inline-flex items-center justify-center gap-3 px-8 py-4 rounded-none bg-[#D99B38] hover:bg-[#c58927] text-stone-950 border-2 border-stone-900 font-black text-xs sm:text-sm uppercase tracking-[0.2em] shadow-[4px_4px_0px_#1C1917] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_#1C1917] active:scale-95 transition-all cursor-pointer"
                 >
                   <Play className="w-4 h-4 fill-current" />
@@ -387,7 +774,15 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                 </button>
               </div>
             ) : (
-              <div className="bg-[#FDFBF7] border-2 border-stone-900 p-6 sm:p-7 shadow-[6px_6px_0px_#1C1917] space-y-5">
+              <div
+                className={`bg-[#FDFBF7] border-2 p-5 sm:p-6 shadow-[6px_6px_0px_#1C1917] lg:min-h-[416px] flex flex-col justify-between gap-4 transition-colors duration-300 ${
+                  screenTensionLevel >= 3
+                    ? 'border-red-700'
+                    : screenTensionLevel === 2
+                      ? 'border-red-500/80'
+                      : 'border-stone-900'
+                }`}
+              >
                 <div className="border-l-4 border-[#D99B38] pl-4 sm:pl-5 space-y-1.5">
                   <h3 className="text-lg sm:text-2xl font-bold text-stone-900 leading-snug">
                     {activeMember.question}
@@ -395,7 +790,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                 </div>
 
                 {activeMember.type === 'multiple_choice' ? (
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {activeMember.options?.map((option, optIdx) => {
                       const isOptionDisabled = progress.disabledOptions.includes(option.id)
                       const isHighlightedSuccess = isApprovedState && selectedOptionId === option.id
@@ -405,7 +800,20 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                           key={option.id}
                           type="button"
                           disabled={isLocked || isOptionDisabled || isApprovedState}
+                          onMouseEnter={() => {
+                            if (!isOptionDisabled && !isApprovedState) {
+                              setHoveredOptionId(option.id)
+                            }
+                          }}
+                          onMouseLeave={() => setHoveredOptionId(null)}
+                          onFocus={() => {
+                            if (!isOptionDisabled && !isApprovedState) {
+                              setHoveredOptionId(option.id)
+                            }
+                          }}
+                          onBlur={() => setHoveredOptionId(null)}
                           onClick={() => {
+                            setHoveredOptionId(null)
                             setSelectedOptionId(option.id)
                             submitMultipleChoice(activeMember.id, option.id)
                           }}
@@ -465,6 +873,8 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                           type="text"
                           value={textValue}
                           onChange={(e) => setTextValue(e.target.value)}
+                          onFocus={() => setHoveredOptionId('text-input')}
+                          onBlur={() => setHoveredOptionId(null)}
                           disabled={isLocked || isApprovedState}
                           placeholder={activeMember.placeholder || 'Digite sua resposta...'}
                           autoFocus
@@ -501,9 +911,11 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                 )}
               </div>
             )}
+            </div>
           </section>
         </div>
       </main>
+      </div>
     </div>
   )
 }
