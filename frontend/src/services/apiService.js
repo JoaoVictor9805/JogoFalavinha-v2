@@ -47,11 +47,15 @@ export const apiService = {
   },
 
   // Partidas e Validação
-  async iniciarPartida(jogadorId) {
+  async iniciarPartida(jogadorId, { forceNew = false } = {}) {
     return request('/partidas/iniciar', {
       method: 'POST',
-      body: JSON.stringify({ jogadorId }),
+      body: JSON.stringify({ jogadorId, forceNew }),
     })
+  },
+
+  async obterHistoricoTentativas(jogadorId) {
+    return request(`/partidas/jogador/${jogadorId}/historico`)
   },
 
   async obterPartida(partidaId) {

@@ -60,8 +60,8 @@ function RegistrationScreen() {
     e.preventDefault()
     if (isLocked || isSubmitting) return
 
-    if (!registerForm.nome.trim() || !registerForm.email.trim()) {
-      setLocalError('Por favor, preencha o nome e o e-mail corporativo.')
+    if (!registerForm.nome.trim() || !registerForm.email.trim() || !registerForm.senha.trim()) {
+      setLocalError('Por favor, preencha o nome, o e-mail corporativo e uma senha.')
       return
     }
 
@@ -80,8 +80,8 @@ function RegistrationScreen() {
     e.preventDefault()
     if (isLocked || isSubmitting) return
 
-    if (!loginForm.email.trim()) {
-      setLocalError('Por favor, informe seu e-mail corporativo.')
+    if (!loginForm.email.trim() || !loginForm.senha.trim()) {
+      setLocalError('Por favor, informe seu e-mail corporativo e sua senha.')
       return
     }
 
@@ -204,7 +204,7 @@ function RegistrationScreen() {
                 htmlFor="senha"
                 className="block text-[11px] font-black uppercase tracking-[0.16em] text-stone-800 mb-1.5"
               >
-                Senha de Acesso (para retomar depois)
+                Senha de Acesso (para retomar depois) *
               </label>
               <div className="relative group">
                 <Key className="w-4 h-4 text-stone-400 group-focus-within:text-[#B87D1E] absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors" />
@@ -212,6 +212,7 @@ function RegistrationScreen() {
                   id="senha"
                   name="senha"
                   type="password"
+                  required
                   placeholder="Crie uma senha simples (ex: 1234)"
                   value={registerForm.senha}
                   onChange={handleRegisterChange}
@@ -328,7 +329,7 @@ function RegistrationScreen() {
                 htmlFor="login-senha"
                 className="block text-[11px] font-black uppercase tracking-[0.16em] text-stone-800 mb-1.5"
               >
-                Senha
+                Senha *
               </label>
               <div className="relative group">
                 <Key className="w-4 h-4 text-stone-400 group-focus-within:text-[#B87D1E] absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors" />
@@ -336,6 +337,7 @@ function RegistrationScreen() {
                   id="login-senha"
                   name="senha"
                   type="password"
+                  required
                   placeholder="Digite sua senha cadastrada"
                   value={loginForm.senha}
                   onChange={handleLoginChange}

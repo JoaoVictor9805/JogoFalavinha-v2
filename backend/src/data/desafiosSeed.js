@@ -5,7 +5,7 @@ export const DESAFIOS_CONSELHO = [
   {
     id: 1,
     codigo: 'M1',
-    nome: 'Valdir',
+    nome: 'André / Sapo',
     cargo: 'Cadeira 01 · Estrutura & Unidades',
     rotuloCurto: 'Unidades',
     posicaoMesa: 'left-outer',

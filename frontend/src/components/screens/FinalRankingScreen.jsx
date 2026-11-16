@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
   Award,
@@ -6,8 +6,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  History,
   Info,
+  LogOut,
+  Play,
   RotateCcw,
+  Sparkles,
+  Star,
   Trophy,
   Users,
 } from 'lucide-react'
@@ -27,14 +32,32 @@ function FinalRankingScreen() {
     memberProgress,
     rankingHistory,
     rankingSetores,
+    playerHistory,
+    justFinished,
     restartGame,
+    logout,
+    recarregarRankings,
+    carregarHistoricoTentativas,
   } = useGame()
 
-  const [rankingTab, setRankingTab] = useState('geral') // 'geral' | 'setores'
+  // Alternância interna do Placar: 'geral' (Individual) | 'setores' (Equipes)
+  const [rankingTab, setRankingTab] = useState('geral')
+
   const [currentPageGeral, setCurrentPageGeral] = useState(1)
   const [currentPageSetores, setCurrentPageSetores] = useState(1)
+  const [currentPageTentativas, setCurrentPageTentativas] = useState(1)
+
+  // Ao montar ou atualizar a tela, garante atualização em tempo real de rankings e tentativas
+  useEffect(() => {
+    recarregarRankings?.()
+    if (player?.id && carregarHistoricoTentativas) {
+      carregarHistoricoTentativas(player.id)
+    }
+  }, [player?.id, carregarHistoricoTentativas, recarregarRankings])
 
   const councilList = Array.isArray(challenges) && challenges.length > 0 ? challenges : []
+  const tentativasList = playerHistory?.tentativas || []
+  const melhorPartida = playerHistory?.melhorPartida || null
 
   // Paginação: Ranking Geral
   const totalPagesGeral = Math.max(1, Math.ceil(rankingHistory.length / ITEMS_PER_PAGE))
@@ -50,137 +73,270 @@ function FinalRankingScreen() {
     currentPageSetores * ITEMS_PER_PAGE
   )
 
+  // Paginação: Minhas Tentativas
+  const totalPagesTentativas = Math.max(1, Math.ceil(tentativasList.length / ITEMS_PER_PAGE))
+  const paginatedTentativas = tentativasList.slice(
+    (currentPageTentativas - 1) * ITEMS_PER_PAGE,
+    currentPageTentativas * ITEMS_PER_PAGE
+  )
+
   return (
-    <div className="min-h-screen w-full bg-[#F5F0E6] text-stone-900 pt-22 pb-12 px-4 sm:px-8 flex flex-col justify-center">
-      <div className="max-w-6xl w-full mx-auto space-y-8">
-        {/* Bloco de Resumo do Resultado Final */}
+    <div className="min-h-screen w-full bg-[#F5F0E6] text-stone-900 pt-22 pb-16 px-4 sm:px-8 flex flex-col justify-center">
+      <div className="max-w-6xl w-full mx-auto space-y-10">
+        {/* ========================================================= */}
+        {/* 1. BLOCO SUPERIOR DE RESUMO / PAINEL DE DESEMPENHO        */}
+        {/* ========================================================= */}
         <section className="bg-[#FDFBF7] border-2 border-stone-900 p-6 sm:p-8 shadow-[6px_6px_0px_#1C1917] space-y-6 animate-modal-pop">
+          {/* Cabeçalho do Card */}
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-stone-200 pb-5">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-none bg-[#D99B38] text-stone-950 border-2 border-stone-900 shadow-[3px_3px_0px_#1C1917] flex items-center justify-center shrink-0">
-                <Trophy className="w-7 h-7 animate-vn-idle" />
+                {justFinished ? (
+                  <Trophy className="w-7 h-7 animate-vn-idle" />
+                ) : (
+                  <Award className="w-7 h-7" />
+                )}
               </div>
 
               <div>
                 <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-stone-900">
-                  Você Passou pelo Conselho Next!
+                  {justFinished
+                    ? 'Você Passou pelo Conselho Next!'
+                    : 'Painel de Desempenho & Recordes'}
                 </h1>
                 <p className="text-xs sm:text-sm text-stone-600 mt-0.5">
-                  Parabéns, <strong className="text-stone-900">{player?.nome}</strong> (
-                  {player?.setor} · {player?.unidade}).
+                  {justFinished ? (
+                    <>
+                      Parabéns, <strong className="text-stone-900">{player?.nome}</strong> (
+                      {player?.setor} · {player?.unidade}). Sua aprovação foi registrada no ranking!
+                    </>
+                  ) : (
+                    <>
+                      Colaborador: <strong className="text-stone-900">{player?.nome}</strong> (
+                      {player?.setor} · {player?.unidade}).
+                    </>
+                  )}
                 </p>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={restartGame}
-              className="inline-flex items-center gap-2.5 px-6 py-3.5 rounded-none bg-[#D99B38] hover:bg-[#c58927] text-stone-950 border-2 border-stone-900 font-black text-xs sm:text-sm uppercase tracking-[0.18em] shadow-[4px_4px_0px_#1C1917] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_#1C1917] active:scale-95 transition-all cursor-pointer shrink-0"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>Jogar Novamente</span>
-            </button>
-          </div>
-
-          {/* Métricas do Tempo Final */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-emerald-600 p-4 animate-panel-rise">
-              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">
-                <Clock className="w-4 h-4" />
-                <span>Tempo Final Oficial</span>
-              </div>
-              <div className="font-mono text-3xl sm:text-4xl font-black text-stone-900 mt-1.5">
-                {formatarTempo(totalSeconds)}
-              </div>
-              <div className="text-xs text-stone-500 mt-1">
-                {totalSeconds}{' '}
-                {totalSeconds === 1
-                  ? 'segundo total contabilizado'
-                  : 'segundos totais contabilizados'}
-              </div>
-            </div>
-
-            <div
-              className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-[#D99B38] p-4 animate-panel-rise"
-              style={{ animationDelay: '70ms' }}
-            >
-              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-[#B87D1E]">
-                <Award className="w-4 h-4" />
-                <span>Tempo de Percurso Real</span>
-              </div>
-              <div className="font-mono text-2xl sm:text-3xl font-extrabold text-stone-900 mt-1.5">
-                {formatarTempo(realSeconds)}
-              </div>
-              <div className="text-xs text-stone-500 mt-1">
-                Tempo líquido sem contar punições
-              </div>
-            </div>
-
-            <div
-              className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-red-600 p-4 animate-panel-rise"
-              style={{ animationDelay: '140ms' }}
-            >
-              <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-red-600">
-                <AlertTriangle className="w-4 h-4" />
-                <span>Penalidades Acumuladas</span>
-              </div>
-              <div className="font-mono text-2xl sm:text-3xl font-extrabold text-red-600 mt-1.5">
-                +{penaltySeconds}s
-              </div>
-              <div className="text-xs text-stone-500 mt-1">
-                {totalErrors}{' '}
-                {totalErrors === 1 ? 'erro cometido' : 'erros cometidos'} (+5s por erro)
-              </div>
-            </div>
-          </div>
-
-          {/* Resumo das 7 Cadeiras do Conselho */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 pt-1">
-            {councilList.map((m, idx) => {
-              const st = memberProgress[m.id] || { errors: 0 }
-              return (
-                <div
-                  key={m.id}
-                  style={{ animationDelay: `${180 + idx * 45}ms` }}
-                  className="rounded-none bg-[#F5F0E6] border-2 border-stone-300 border-t-4 border-t-stone-900 p-3 text-center space-y-1 animate-panel-rise"
+            {/* Botões Lado a Lado: Trocar Usuário na esquerda, Jogar Novamente na direita */}
+            <div className="flex flex-row flex-nowrap items-center gap-2.5 sm:gap-3 shrink-0">
+              {player && (
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-3 rounded-none bg-stone-100 hover:bg-stone-200 text-stone-800 hover:text-stone-950 border-2 border-stone-900 font-black text-xs sm:text-sm uppercase tracking-[0.14em] shadow-[3px_3px_0px_#1C1917] hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_#1C1917] active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+                  title="Desconectar do usuário atual"
                 >
-                  <div className="inline-flex items-center justify-center w-6 h-6 rounded-none bg-emerald-600 text-white">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  <LogOut className="w-4 h-4" />
+                  <span>Trocar Usuário</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={restartGame}
+                className="inline-flex items-center justify-center gap-2.5 px-5 sm:px-6 py-3 rounded-none bg-[#D99B38] hover:bg-[#c58927] text-stone-950 border-2 border-stone-900 font-black text-xs sm:text-sm uppercase tracking-[0.18em] shadow-[4px_4px_0px_#1C1917] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_#1C1917] active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+              >
+                {justFinished ? (
+                  <>
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Jogar Novamente</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4" />
+                    <span>{melhorPartida ? 'Jogar Novamente' : 'Iniciar Desafio'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* CASO A: Acabou de finalizar a corrida atual */}
+          {justFinished && (
+            <>
+              {/* Métricas do Tempo Final da Corrida */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-emerald-600 p-4 animate-panel-rise">
+                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                    <Clock className="w-4 h-4" />
+                    <span>Tempo Final Oficial</span>
                   </div>
-                  <div className="text-xs font-black uppercase tracking-tight text-stone-900 truncate">
-                    {m.name}
+                  <div className="font-mono text-3xl sm:text-4xl font-black text-stone-900 mt-1.5">
+                    {formatarTempo(totalSeconds)}
                   </div>
-                  <div
-                    className={`text-[11px] font-mono font-bold ${
-                      st.errors > 0 ? 'text-red-600' : 'text-emerald-700'
-                    }`}
-                  >
-                    {st.errors === 0
-                      ? 'Sem erros'
-                      : `${st.errors} ${st.errors === 1 ? 'erro' : 'erros'} (+${
-                          st.errors * 5
-                        }s)`}
+                  <div className="text-xs text-stone-500 mt-1">
+                    {totalSeconds}{' '}
+                    {totalSeconds === 1
+                      ? 'segundo total contabilizado'
+                      : 'segundos totais contabilizados'}
                   </div>
                 </div>
-              )
-            })}
-          </div>
+
+                <div
+                  className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-[#D99B38] p-4 animate-panel-rise"
+                  style={{ animationDelay: '70ms' }}
+                >
+                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-[#B87D1E]">
+                    <Award className="w-4 h-4" />
+                    <span>Tempo de Percurso Real</span>
+                  </div>
+                  <div className="font-mono text-2xl sm:text-3xl font-extrabold text-stone-900 mt-1.5">
+                    {formatarTempo(realSeconds)}
+                  </div>
+                  <div className="text-xs text-stone-500 mt-1">
+                    Tempo líquido sem contar punições
+                  </div>
+                </div>
+
+                <div
+                  className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-red-600 p-4 animate-panel-rise"
+                  style={{ animationDelay: '140ms' }}
+                >
+                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-red-600">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Penalidades Acumuladas</span>
+                  </div>
+                  <div className="font-mono text-2xl sm:text-3xl font-extrabold text-red-600 mt-1.5">
+                    +{penaltySeconds}s
+                  </div>
+                  <div className="text-xs text-stone-500 mt-1">
+                    {totalErrors}{' '}
+                    {totalErrors === 1 ? 'erro cometido' : 'erros cometidos'} (+5s por erro)
+                  </div>
+                </div>
+              </div>
+
+              {/* Resumo das 7 Cadeiras do Conselho */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 pt-1">
+                {councilList.map((m, idx) => {
+                  const st = memberProgress[m.id] || { errors: 0 }
+                  return (
+                    <div
+                      key={m.id}
+                      style={{ animationDelay: `${180 + idx * 45}ms` }}
+                      className="rounded-none bg-[#F5F0E6] border-2 border-stone-300 border-t-4 border-t-stone-900 p-3 text-center space-y-1 animate-panel-rise"
+                    >
+                      <div className="inline-flex items-center justify-center w-6 h-6 rounded-none bg-emerald-600 text-white">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="text-xs font-black uppercase tracking-tight text-stone-900 truncate">
+                        {m.name}
+                      </div>
+                      <div
+                        className={`text-[11px] font-mono font-bold ${
+                          st.errors > 0 ? 'text-red-600' : 'text-emerald-700'
+                        }`}
+                      >
+                        {st.errors === 0
+                          ? 'Sem erros'
+                          : `${st.errors} ${st.errors === 1 ? 'erro' : 'erros'} (+${
+                              st.errors * 5
+                            }s)`}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+
+          {/* CASO B: Acessou via Login (Sem partida ativa) com histórico de tentativas */}
+          {!justFinished && melhorPartida && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-emerald-600 p-4 animate-panel-rise">
+                  <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                    <Star className="w-4 h-4 fill-emerald-600" />
+                    <span>Seu Recorde Pessoal Oficial</span>
+                  </div>
+                  <div className="font-mono text-3xl sm:text-4xl font-black text-stone-900 mt-1.5">
+                    {formatarTempo(melhorPartida.segundosTotais)}
+                  </div>
+                  <div className="text-xs text-stone-500 mt-1">
+                    Seu melhor tempo registrado no ranking oficial
+                  </div>
+                </div>
+
+                <div
+                  className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-[#D99B38] p-4 animate-panel-rise"
+                  style={{ animationDelay: '70ms' }}
+                >
+                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-[#B87D1E]">
+                    <Award className="w-4 h-4" />
+                    <span>Tempo Líquido no Recorde</span>
+                  </div>
+                  <div className="font-mono text-2xl sm:text-3xl font-extrabold text-stone-900 mt-1.5">
+                    {formatarTempo(melhorPartida.segundosReais)}
+                  </div>
+                  <div className="text-xs text-stone-500 mt-1">
+                    Tempo real sem penalidades na sua melhor corrida
+                  </div>
+                </div>
+
+                <div
+                  className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-stone-900 p-4 animate-panel-rise"
+                  style={{ animationDelay: '140ms' }}
+                >
+                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-stone-800">
+                    <History className="w-4 h-4" />
+                    <span>Tentativas Concluídas</span>
+                  </div>
+                  <div className="font-mono text-2xl sm:text-3xl font-extrabold text-stone-900 mt-1.5">
+                    {tentativasList.length}
+                  </div>
+                  <div className="text-xs text-stone-500 mt-1">
+                    {tentativasList.length === 1
+                      ? '1 tentativa completa registrada'
+                      : `${tentativasList.length} tentativas completas registradas`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Banner Informativo */}
+              <div className="p-3.5 bg-stone-100 border-2 border-stone-300 flex items-center gap-2.5 text-stone-700 text-xs">
+                <Sparkles className="w-4 h-4 text-[#B87D1E] shrink-0" />
+                <span>
+                  Seu recorde de <strong>{formatarTempo(melhorPartida.segundosTotais)}</strong> pontua no ranking individual e pela equipe do setor <strong>{player?.setor}</strong>.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* CASO C: Acessou via Login mas ainda não completou nenhuma tentativa */}
+          {!justFinished && !melhorPartida && (
+            <div className="p-6 bg-stone-100 border-2 border-dashed border-stone-400 text-center space-y-3">
+              <div className="w-12 h-12 mx-auto rounded-none bg-[#D99B38]/20 text-[#B87D1E] border-2 border-stone-900 flex items-center justify-center">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-black uppercase text-stone-900">
+                Você ainda não possui tentativas concluídas no ranking
+              </h3>
+              <p className="text-xs sm:text-sm text-stone-600 max-w-lg mx-auto">
+                Desafie os 7 conselheiros no labirinto da Falavinha Next, teste seus conhecimentos e registre seu tempo para figurar no ranking e pontuar pela sua equipe!
+              </p>
+            </div>
+          )}
         </section>
 
-        {/* Bloco de Rankings (Abas: Geral e por Setores) */}
+        {/* ========================================================= */}
+        {/* 2. BLOCO DE RANKING: PLACAR OFICIAL DA CONEXÃO NEXT       */}
+        {/* ========================================================= */}
         <section
           className="space-y-4 animate-panel-rise"
           style={{ animationDelay: '220ms' }}
         >
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-l-4 border-[#D99B38] pl-4">
             <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-stone-900" />
+              <Trophy className="w-5 h-5 text-stone-900" />
               <h2 className="text-lg font-black uppercase tracking-tight text-stone-900">
                 Placar Oficial da Conexão Next
               </h2>
             </div>
 
-            {/* Alternância de Abas de Ranking */}
+            {/* Alternância de Abas: Individual vs Setores */}
             <div className="inline-flex border-2 border-stone-900 bg-stone-200">
               <button
                 type="button"
@@ -231,7 +387,6 @@ function FinalRankingScreen() {
                   ) : (
                     paginatedGeral.map((item, idx) => {
                       const errCount = item.totalErrors || 0
-                      // Identificação inequívoca: apenas bate se for o mesmo jogadorId ou o mesmo email corporativo
                       const isCurrentUser = Boolean(
                         (player?.id && item.jogadorId === player.id) ||
                         (player?.email && item.email && item.email.toLowerCase() === player.email.toLowerCase())
@@ -275,7 +430,7 @@ function FinalRankingScreen() {
                 </tbody>
               </table>
 
-              {/* Barra de Paginação (Máximo 10 linhas por página) */}
+              {/* Paginação Ranking Geral */}
               {totalPagesGeral > 1 && (
                 <div className="flex items-center justify-between border-t-2 border-stone-900 bg-stone-100 p-3 text-xs font-bold text-stone-700">
                   <span className="font-mono text-stone-600">
@@ -312,7 +467,6 @@ function FinalRankingScreen() {
           {/* TABELA: RANKING POR SETORES */}
           {rankingTab === 'setores' && (
             <div className="space-y-3">
-              {/* Box explicativo das regras de Quórum e Desempate */}
               <div className="p-3.5 bg-stone-100 border-2 border-stone-300 flex items-start gap-2.5 text-stone-700 text-xs">
                 <Info className="w-4 h-4 text-[#B87D1E] shrink-0 mt-0.5" />
                 <div>
@@ -376,13 +530,12 @@ function FinalRankingScreen() {
                                 </span>
                               )}
                             </td>
-                            {/* Coluna de Pessoas Participantes: Apenas a contagem limpa de colaboradores */}
                             <td className="py-3.5 px-4 text-center">
                               <span
                                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono font-black border ${
                                   isQualificado
-                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                                    : 'bg-stone-100 text-stone-700 border-stone-300'
+                                    ? 'bg-emerald-100 text-emerald-900 border-emerald-400'
+                                    : 'bg-amber-100 text-amber-900 border-amber-400'
                                 }`}
                               >
                                 <Users className="w-3.5 h-3.5" />
@@ -408,7 +561,7 @@ function FinalRankingScreen() {
                   </tbody>
                 </table>
 
-                {/* Barra de Paginação para Setores (se passar de 10) */}
+                {/* Paginação Setores */}
                 {totalPagesSetores > 1 && (
                   <div className="flex items-center justify-between border-t-2 border-stone-900 bg-stone-100 p-3 text-xs font-bold text-stone-700">
                     <span className="font-mono text-stone-600">
@@ -442,6 +595,121 @@ function FinalRankingScreen() {
               </div>
             </div>
           )}
+        </section>
+
+        {/* ========================================================= */}
+        {/* 3. BLOCO DEDICADO: MINHAS TENTATIVAS (ABAIXO DO RANKING)  */}
+        {/* ========================================================= */}
+        <section
+          className="space-y-4 animate-panel-rise"
+          style={{ animationDelay: '300ms' }}
+        >
+          <div className="flex items-center justify-between gap-4 border-l-4 border-stone-900 pl-4">
+            <div className="flex items-center gap-2">
+              <History className="w-5 h-5 text-stone-900" />
+              <h2 className="text-lg font-black uppercase tracking-tight text-stone-900">
+                Minhas Tentativas Anteriores
+              </h2>
+            </div>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-200 border border-stone-800 text-xs font-mono font-black text-stone-900">
+              {tentativasList.length}{' '}
+              {tentativasList.length === 1 ? 'tentativa concluída' : 'tentativas concluídas'}
+            </span>
+          </div>
+
+          <div className="overflow-x-auto border-2 border-stone-900 bg-[#FDFBF7] shadow-[6px_6px_0px_#1C1917]">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr className="bg-stone-900 text-white border-b-2 border-[#D99B38] text-[11px] font-black uppercase tracking-[0.16em]">
+                  <th className="py-3.5 px-4"># Tentativa</th>
+                  <th className="py-3.5 px-4">Concluída em</th>
+                  <th className="py-3.5 px-4">Tempo de Percurso</th>
+                  <th className="py-3.5 px-4">Penalidades</th>
+                  <th className="py-3.5 px-4">Destaque</th>
+                  <th className="py-3.5 px-4 text-right">Tempo Oficial</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-200">
+                {tentativasList.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-stone-500 font-semibold text-xs uppercase tracking-wider">
+                      Você ainda não possui tentativas concluídas no ranking. Conclua uma corrida no labirinto para registrar seu tempo aqui!
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedTentativas.map((item) => (
+                    <tr
+                      key={item.id}
+                      className={
+                        item.isMelhorTempo
+                          ? 'bg-[#F5F0E6] border-l-4 border-l-[#D99B38]'
+                          : 'hover:bg-[#F5F0E6]/60 transition-colors'
+                      }
+                    >
+                      <td className="py-3.5 px-4 font-mono font-black text-stone-900">
+                        Tentativa #{item.tentativaNumero}
+                      </td>
+                      <td className="py-3.5 px-4 text-xs font-semibold text-stone-600">
+                        {item.completedAt || '-'}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-stone-700">
+                        {formatarTempo(item.segundosReais)}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-xs font-bold text-red-600">
+                        +{item.segundosPenalidade || 0}s ({item.totalErros || 0}{' '}
+                        {item.totalErros === 1 ? 'erro' : 'erros'})
+                      </td>
+                      <td className="py-3.5 px-4">
+                        {item.isMelhorTempo ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase bg-[#D99B38] text-stone-950 px-2 py-0.5 border border-stone-900 shadow-[1px_1px_0px_#1C1917]">
+                            <Star className="w-3 h-3 fill-stone-950" />
+                            Recorde Pessoal
+                          </span>
+                        ) : (
+                          <span className="text-xs text-stone-400 font-medium">—</span>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono font-black text-emerald-700 text-right">
+                        {formatarTempo(item.segundosTotais)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+
+            {/* Paginação: Mostra até 10 direto, a partir disso paginação */}
+            {totalPagesTentativas > 1 && (
+              <div className="flex items-center justify-between border-t-2 border-stone-900 bg-stone-100 p-3 text-xs font-bold text-stone-700">
+                <span className="font-mono text-stone-600">
+                  Página {currentPageTentativas} de {totalPagesTentativas} ({tentativasList.length} tentativas)
+                </span>
+                <div className="inline-flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={currentPageTentativas <= 1}
+                    onClick={() => setCurrentPageTentativas((p) => Math.max(1, p - 1))}
+                    className="p-1.5 border-2 border-stone-900 bg-white hover:bg-[#D99B38] disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                    title="Página Anterior"
+                  >
+                    <ChevronLeft className="w-4 h-4 text-stone-900" />
+                  </button>
+                  <span className="px-2 font-mono text-stone-800">
+                    {currentPageTentativas} / {totalPagesTentativas}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={currentPageTentativas >= totalPagesTentativas}
+                    onClick={() => setCurrentPageTentativas((p) => Math.min(totalPagesTentativas, p + 1))}
+                    className="p-1.5 border-2 border-stone-900 bg-white hover:bg-[#D99B38] disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                    title="Próxima Página"
+                  >
+                    <ChevronRight className="w-4 h-4 text-stone-900" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </section>
       </div>
     </div>

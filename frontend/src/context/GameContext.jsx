@@ -40,6 +40,12 @@ export function GameProvider({ children }) {
   const [activePartida, setActivePartida] = useState(null)
   const [challenges, setChallenges] = useState(COUNCIL_MEMBERS)
   const [authError, setAuthError] = useState('')
+  const [justFinished, setJustFinished] = useState(false)
+  const [playerHistory, setPlayerHistory] = useState({
+    totalTentativas: 0,
+    melhorPartida: null,
+    tentativas: [],
+  })
 
   // Cronômetro global em segundos reais + penalidades (+5s por erro)
   const [isTimerRunning, setIsTimerRunning] = useState(false)
@@ -109,9 +115,35 @@ export function GameProvider({ children }) {
     }
   }, [])
 
+  // Carrega histórico e métricas de tentativas anteriores do colaborador
+  const carregarHistoricoTentativas = useCallback(async (jogadorId) => {
+    const targetId = jogadorId || player?.id
+    if (!targetId) return null
+    try {
+      const res = await apiService.obterHistoricoTentativas(targetId)
+      if (res) {
+        setPlayerHistory({
+          totalTentativas: res.totalTentativas || 0,
+          melhorPartida: res.melhorPartida || null,
+          tentativas: res.tentativas || [],
+        })
+        return res
+      }
+    } catch (err) {
+      console.warn('[GameContext] Erro ao carregar histórico de tentativas:', err)
+    }
+    return null
+  }, [player?.id])
+
   useEffect(() => {
     recarregarRankings()
   }, [recarregarRankings])
+
+  useEffect(() => {
+    if (player?.id) {
+      carregarHistoricoTentativas(player.id)
+    }
+  }, [player?.id, carregarHistoricoTentativas])
 
   const registerTimeout = useCallback((fn, delay) => {
     const id = setTimeout(fn, delay)
@@ -218,7 +250,7 @@ export function GameProvider({ children }) {
         } catch { }
 
         // 2. Inicia uma nova partida no banco
-        const partidaRes = await apiService.iniciarPartida(jogador.id)
+        const partidaRes = await apiService.iniciarPartida(jogador.id, { forceNew: true })
         setActivePartida(partidaRes.partida)
 
         // 3. Inicializa estado de jogo limpo
@@ -231,6 +263,7 @@ export function GameProvider({ children }) {
         setCeoBriefingDismissed(false)
         setMazeModal(null)
         setIsTimerRunning(false)
+        setJustFinished(false)
         setScreen('COMIC_INTRO')
       } catch (err) {
         setAuthError(err.message || 'Erro ao realizar cadastro.')
@@ -265,50 +298,65 @@ export function GameProvider({ children }) {
           localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(jogador))
         } catch { }
 
+        // Carrega histórico de tentativas e rankings em paralelo
+        await Promise.all([
+          carregarHistoricoTentativas(jogador.id),
+          recarregarRankings(),
+        ])
+
         // 2. Verifica se já existe uma partida em andamento para retomar
-        let partida = loginRes.partidaEmAndamento
-        if (!partida) {
-          const partidaRes = await apiService.iniciarPartida(jogador.id)
-          partida = partidaRes.partida
-        }
-        setActivePartida(partida)
+        const partida = loginRes.partidaEmAndamento
 
-        // 3. Reconstitui o progresso salvo a partir dos dados do banco
-        const initial = createInitialMemberProgress(challenges)
-        const concluidos = partida.membrosConcluidos || []
-        const desabilitadas = partida.opcoesDesabilitadas || []
+        // Se possui partida ativa com status EM_ANDAMENTO
+        if (partida && partida.status === 'EM_ANDAMENTO') {
+          setActivePartida(partida)
 
-        concluidos.forEach((id) => {
-          if (initial[id]) {
-            initial[id].completed = true
-          }
-        })
+          // 3. Reconstitui o progresso salvo a partir dos dados do banco
+          const initial = createInitialMemberProgress(challenges)
+          const concluidos = partida.membrosConcluidos || []
+          const desabilitadas = partida.opcoesDesabilitadas || []
 
-        desabilitadas.forEach((d) => {
-          if (initial[d.membroId]) {
-            initial[d.membroId].disabledOptions = Array.from(
-              new Set([...initial[d.membroId].disabledOptions, d.opcaoId])
-            )
-          }
-        })
+          concluidos.forEach((id) => {
+            if (initial[id]) {
+              initial[id].completed = true
+            }
+          })
 
-        setMemberProgress(initial)
-        setRealSeconds(partida.segundosReais || 0)
-        setPenaltySeconds(partida.segundosPenalidade || 0)
-        setPenaltyAlertKey(0)
-        setActiveMemberId(null)
-        setVnFeedback('idle')
-        setMazeModal(null)
+          desabilitadas.forEach((d) => {
+            if (initial[d.membroId]) {
+              initial[d.membroId].disabledOptions = Array.from(
+                new Set([...initial[d.membroId].disabledOptions, d.opcaoId])
+              )
+            }
+          })
 
-        // Se já tinha avançado no jogo, retoma direto no Tribunal
-        if (concluidos.length > 0 || (partida.segundosReais || 0) > 0) {
+          setMemberProgress(initial)
+          setRealSeconds(partida.segundosReais || 0)
+          setPenaltySeconds(partida.segundosPenalidade || 0)
+          setPenaltyAlertKey(0)
+          setActiveMemberId(null)
+          setVnFeedback('idle')
+          setMazeModal(null)
+          setJustFinished(false)
+
+          // Redireciona diretamente para a tela com os conselheiros
           setCeoBriefingDismissed(true)
           setIsTimerRunning(true)
           setScreen('TRIBUNAL_HUB')
         } else {
-          setCeoBriefingDismissed(false)
+          // NÃO possui partida ativa: redireciona diretamente para a tela de ranking
+          setActivePartida(null)
           setIsTimerRunning(false)
-          setScreen('COMIC_INTRO')
+          setRealSeconds(0)
+          setPenaltySeconds(0)
+          setPenaltyAlertKey(0)
+          setMemberProgress(createInitialMemberProgress(challenges))
+          setActiveMemberId(null)
+          setVnFeedback('idle')
+          setCeoBriefingDismissed(false)
+          setMazeModal(null)
+          setJustFinished(false)
+          setScreen('FINAL_RANKING')
         }
       } catch (err) {
         setAuthError(err.message || 'Erro ao realizar login.')
@@ -318,7 +366,7 @@ export function GameProvider({ children }) {
         setIsLocked(false)
       }
     },
-    [challenges, clearAllTimeouts]
+    [carregarHistoricoTentativas, challenges, clearAllTimeouts, recarregarRankings]
   )
 
   // Abre o modal 3D de apresentação após o CEO explicar as regras
@@ -351,16 +399,19 @@ export function GameProvider({ children }) {
   // Fecha o modal de progresso
   const closeMazeModal = useCallback(() => {
     playSelectSound()
+    const isFinalTransition = mazeModal?.mode === 'progress' && mazeModal?.isFinal
     triggerBlackoutTransition(() => {
-      setMazeModal((current) => {
-        if (current?.mode === 'progress' && current?.isFinal) {
-          setScreen('FINAL_RANKING')
-          recarregarRankings()
+      setMazeModal(null)
+      if (isFinalTransition) {
+        setJustFinished(true)
+        setScreen('FINAL_RANKING')
+        recarregarRankings()
+        if (player?.id) {
+          carregarHistoricoTentativas(player.id)
         }
-        return null
-      })
+      }
     })
-  }, [recarregarRankings, triggerBlackoutTransition])
+  }, [carregarHistoricoTentativas, mazeModal, player, recarregarRankings, triggerBlackoutTransition])
 
   // Avançar da Comic Strip para a Transição
   const advanceFromComic = useCallback(() => {
@@ -458,6 +509,10 @@ export function GameProvider({ children }) {
               setIsTimerRunning(false)
               playVictorySound()
               recarregarRankings()
+              const jogadorId = snapshot.player?.id || player?.id
+              if (jogadorId) {
+                carregarHistoricoTentativas(jogadorId)
+              }
 
               triggerBlackoutTransition(() => {
                 setMazeModal({
@@ -516,7 +571,7 @@ export function GameProvider({ children }) {
         setIsLocked(false)
       }
     },
-    [challenges, memberProgress, penaltySeconds, recarregarRankings, registerTimeout, triggerBlackoutTransition]
+    [carregarHistoricoTentativas, challenges, memberProgress, penaltySeconds, player?.id, recarregarRankings, registerTimeout, triggerBlackoutTransition]
   )
 
   // 5B. Responder texto/código (mantido para compatibilidade caso haja input)
@@ -528,7 +583,7 @@ export function GameProvider({ children }) {
     []
   )
 
-  // 6. Reiniciar jogo a partir da Tela Final
+  // 6. Reiniciar jogo a partir da Tela Final / Ranking
   const restartGame = useCallback(async () => {
     clearAllTimeouts()
     lockRef.current = false
@@ -542,20 +597,39 @@ export function GameProvider({ children }) {
     setVnFeedback('idle')
     setCeoBriefingDismissed(false)
     setMazeModal(null)
+    setJustFinished(false)
 
-    // Se o jogador estiver logado, inicia uma nova partida no banco
+    // Se o jogador estiver logado, inicia uma nova partida no banco forçando encerramento de qualquer resíduo
     if (player?.id) {
       try {
-        const novaPartida = await apiService.iniciarPartida(player.id)
+        const novaPartida = await apiService.iniciarPartida(player.id, { forceNew: true })
         setActivePartida(novaPartida.partida)
         setScreen('COMIC_INTRO')
-      } catch {
+      } catch (err) {
+        console.error('[GameContext] Erro ao iniciar nova partida:', err)
         setScreen('REGISTRATION')
       }
     } else {
       setScreen('REGISTRATION')
     }
   }, [challenges, clearAllTimeouts, player?.id])
+
+  // 7. Desconectar e voltar para a tela de login/cadastro
+  const logout = useCallback(() => {
+    clearAllTimeouts()
+    try {
+      localStorage.removeItem(PLAYER_STORAGE_KEY)
+    } catch { }
+    setPlayer(null)
+    setActivePartida(null)
+    setIsTimerRunning(false)
+    setRealSeconds(0)
+    setPenaltySeconds(0)
+    setMemberProgress(createInitialMemberProgress(challenges))
+    setPlayerHistory({ totalTentativas: 0, melhorPartida: null, tentativas: [] })
+    setJustFinished(false)
+    setScreen('REGISTRATION')
+  }, [challenges, clearAllTimeouts])
 
   const value = useMemo(
     () => ({
@@ -582,7 +656,10 @@ export function GameProvider({ children }) {
       screenFadePhase,
       rankingHistory,
       rankingSetores,
+      playerHistory,
+      justFinished,
       recarregarRankings,
+      carregarHistoricoTentativas,
       setCeoBriefingDismissed,
       openIntroMazeModal,
       confirmIntroMazeAndStart,
@@ -597,6 +674,7 @@ export function GameProvider({ children }) {
       submitMultipleChoice,
       submitTextAnswer,
       restartGame,
+      logout,
     }),
     [
       screen,
@@ -622,7 +700,10 @@ export function GameProvider({ children }) {
       screenFadePhase,
       rankingHistory,
       rankingSetores,
+      playerHistory,
+      justFinished,
       recarregarRankings,
+      carregarHistoricoTentativas,
       openIntroMazeModal,
       confirmIntroMazeAndStart,
       openManualMazeModal,
@@ -636,6 +717,7 @@ export function GameProvider({ children }) {
       submitMultipleChoice,
       submitTextAnswer,
       restartGame,
+      logout,
     ]
   )
 

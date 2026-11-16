@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import prisma from '../db.js'
+import { formatarDataBrasilia } from '../utils/dateFormatter.js'
 
 const router = Router()
 
@@ -67,7 +68,7 @@ router.get('/', async (_req, res) => {
       penaltySeconds: p.segundosPenalidade,
       totalSeconds: p.segundosTotais,
       totalErrors: p.totalErros,
-      completedAt: p.finalizadoEm ? new Date(p.finalizadoEm).toLocaleString('pt-BR') : '',
+      completedAt: formatarDataBrasilia(p.finalizadoEm),
     }))
 
     return res.json(rankingGeral)

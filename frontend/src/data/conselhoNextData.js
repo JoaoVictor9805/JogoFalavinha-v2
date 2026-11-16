@@ -85,7 +85,7 @@ export const COUNCIL_MEMBERS = [
   {
     id: 1,
     code: 'M1',
-    name: 'Valdir',
+    name: 'André / Sapo',
     role: 'Cadeira 01 · Estrutura & Unidades',
     shortLabel: 'Unidades',
     seatPosition: 'left-outer',

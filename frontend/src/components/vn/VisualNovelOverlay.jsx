@@ -8,25 +8,41 @@ import {
   Send,
   XCircle,
 } from 'lucide-react'
-import cutout1Valdir from '../../assets/cutout-1-valdir.png'
-import cutout2RamonPose1 from '../../assets/cutout-2-ramon-pose1.png'
-import cutout2RamonPose2 from '../../assets/cutout-2-ramon-pose2.png'
-import cutout2RamonPose3 from '../../assets/cutout-2-ramon-pose3.png'
-import cutout2RamonWrong from '../../assets/cutout-2-ramon-wrong.png'
-import cutout2RamonSuccess from '../../assets/cutout-2-ramon-success.png'
-import cutout3Vanessa from '../../assets/cutout-3-vanessa.png'
-import cutout4Jhonny from '../../assets/cutout-4-jhonny.png'
-import cutout5Juarez from '../../assets/cutout-5-juarez.png'
-import cutout6RicardoPose1 from '../../assets/cutout-6-ricardo-pose1.png'
-import cutout6RicardoPose2 from '../../assets/cutout-6-ricardo-pose2.png'
-import cutout6RicardoPose3 from '../../assets/cutout-6-ricardo-pose3.png'
-import cutout6RicardoWrong from '../../assets/cutout-6-ricardo-wrong.png'
-import cutout6RicardoSuccess from '../../assets/cutout-6-ricardo-success.png'
-import cutout7EdPose1 from '../../assets/cutout-7-ed-pose1.png'
-import cutout7EdPose2 from '../../assets/cutout-7-ed-pose2.png'
-import cutout7EdPose3 from '../../assets/cutout-7-ed-pose3.png'
-import cutout7EdWrong from '../../assets/cutout-7-ed-wrong.png'
-import cutout7EdSuccess from '../../assets/cutout-7-ed-success.png'
+import cutout1AndrePose1 from '../../assets/andre/cutout-1-andre-pose1.png'
+import cutout1AndrePose2 from '../../assets/andre/cutout-1-andre-pose2.png'
+import cutout1AndrePose3 from '../../assets/andre/cutout-1-andre-pose3.png'
+import cutout1AndreWrong from '../../assets/andre/cutout-1-andre-wrong.png'
+import cutout1AndreSuccess from '../../assets/andre/cutout-1-andre-success.png'
+import cutout2RamonPose1 from '../../assets/ramon/cutout-2-ramon-pose1.png'
+import cutout2RamonPose2 from '../../assets/ramon/cutout-2-ramon-pose2.png'
+import cutout2RamonPose3 from '../../assets/ramon/cutout-2-ramon-pose3.png'
+import cutout2RamonWrong from '../../assets/ramon/cutout-2-ramon-wrong.png'
+import cutout2RamonSuccess from '../../assets/ramon/cutout-2-ramon-success.png'
+import cutout3VanessaPose1 from '../../assets/vanessa/cutout-3-vanessa-pose1.png'
+import cutout3VanessaPose2 from '../../assets/vanessa/cutout-3-vanessa-pose2.png'
+import cutout3VanessaPose3 from '../../assets/vanessa/cutout-3-vanessa-pose3.png'
+import cutout3VanessaWrong from '../../assets/vanessa/cutout-3-vanessa-wrong.png'
+import cutout3VanessaSuccess from '../../assets/vanessa/cutout-3-vanessa-success.png'
+import cutout4JhonnyPose1 from '../../assets/jhonny/cutout-4-jhonny-pose1.png'
+import cutout4JhonnyPose2 from '../../assets/jhonny/cutout-4-jhonny-pose2.png'
+import cutout4JhonnyPose3 from '../../assets/jhonny/cutout-4-jhonny-pose3.png'
+import cutout4JhonnyWrong from '../../assets/jhonny/cutout-4-jhonny-wrong.png'
+import cutout4JhonnySuccess from '../../assets/jhonny/cutout-4-jhonny-success.png'
+import cutout5JuarezPose1 from '../../assets/juarez/cutout-5-juarez-pose1.png'
+import cutout5JuarezPose2 from '../../assets/juarez/cutout-5-juarez-pose2.png'
+import cutout5JuarezPose3 from '../../assets/juarez/cutout-5-juarez-pose3.png'
+import cutout5JuarezWrong from '../../assets/juarez/cutout-5-juarez-wrong.png'
+import cutout5JuarezSuccess from '../../assets/juarez/cutout-5-juarez-success.png'
+import cutout6RicardoPose1 from '../../assets/ricardo/cutout-6-ricardo-pose1.png'
+import cutout6RicardoPose2 from '../../assets/ricardo/cutout-6-ricardo-pose2.png'
+import cutout6RicardoPose3 from '../../assets/ricardo/cutout-6-ricardo-pose3.png'
+import cutout6RicardoWrong from '../../assets/ricardo/cutout-6-ricardo-wrong.png'
+import cutout6RicardoSuccess from '../../assets/ricardo/cutout-6-ricardo-success.png'
+import cutout7EdPose1 from '../../assets/ed/cutout-7-ed-pose1.png'
+import cutout7EdPose2 from '../../assets/ed/cutout-7-ed-pose2.png'
+import cutout7EdPose3 from '../../assets/ed/cutout-7-ed-pose3.png'
+import cutout7EdWrong from '../../assets/ed/cutout-7-ed-wrong.png'
+import cutout7EdSuccess from '../../assets/ed/cutout-7-ed-success.png'
 import { useGame } from '../../context/gameContextInstance'
 import { CEO_TRIBUNAL_BRIEFING, getErrorDialogue } from '../../data/conselhoNextData'
 import { useTypewriter } from '../../hooks/useTypewriter'
@@ -37,9 +53,9 @@ const WRONG_POSE_DURATION_MS = 2000
 
 const MEMBER_CUTOUTS = {
   1: {
-    default: [cutout1Valdir],
-    wrong: null,
-    success: null,
+    default: [cutout1AndrePose1, cutout1AndrePose2, cutout1AndrePose3],
+    wrong: cutout1AndreWrong,
+    success: cutout1AndreSuccess,
   },
   2: {
     default: [cutout2RamonPose1, cutout2RamonPose2, cutout2RamonPose3],
@@ -47,19 +63,19 @@ const MEMBER_CUTOUTS = {
     success: cutout2RamonSuccess,
   },
   3: {
-    default: [cutout3Vanessa],
-    wrong: null,
-    success: null,
+    default: [cutout3VanessaPose1, cutout3VanessaPose2, cutout3VanessaPose3],
+    wrong: cutout3VanessaWrong,
+    success: cutout3VanessaSuccess,
   },
   4: {
-    default: [cutout4Jhonny],
-    wrong: null,
-    success: null,
+    default: [cutout4JhonnyPose1, cutout4JhonnyPose2, cutout4JhonnyPose3],
+    wrong: cutout4JhonnyWrong,
+    success: cutout4JhonnySuccess,
   },
   5: {
-    default: [cutout5Juarez],
-    wrong: null,
-    success: null,
+    default: [cutout5JuarezPose1, cutout5JuarezPose2, cutout5JuarezPose3],
+    wrong: cutout5JuarezWrong,
+    success: cutout5JuarezSuccess,
   },
   6: {
     default: [cutout6RicardoPose1, cutout6RicardoPose2, cutout6RicardoPose3],
@@ -136,12 +152,12 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
 
   const memberConfig = memberId ? MEMBER_CUTOUTS[memberId] : null
   const counselorPoses = isCeoIntro
-    ? [cutout4Jhonny]
+    ? [cutout4JhonnyPose1]
     : isApprovedState && memberConfig?.success
       ? [memberConfig.success]
       : isShowingWrongPose && memberConfig?.wrong
         ? [memberConfig.wrong]
-        : memberConfig?.default || [cutout4Jhonny]
+        : memberConfig?.default || [cutout4JhonnyPose1]
   const activePoseCount = counselorPoses.length
 
   useEffect(() => {

@@ -1,18 +1,18 @@
 import { CheckCircle2 } from 'lucide-react'
-import card1Valdir from '../../assets/card-1-valdir.jpg'
-import card2Ramon from '../../assets/card-2-ramon.jpg'
-import card3Vanessa from '../../assets/card-3-vanessa.jpg'
-import card4Jhonny from '../../assets/card-4-jhonny.jpg'
-import card5Juarez from '../../assets/card-5-juarez.jpg'
-import card6Ricardo from '../../assets/card-6-ricardo.jpg'
-import card7Ed from '../../assets/card-7-ed.jpg'
-import tribunalMesaImg from '../../assets/tribunal-mesa.png'
+import card1Andre from '../../assets/andre/card-1-andre.jpg'
+import card2Ramon from '../../assets/ramon/card-2-ramon.jpg'
+import card3Vanessa from '../../assets/vanessa/card-3-vanessa.jpg'
+import card4Jhonny from '../../assets/jhonny/card-4-jhonny.jpg'
+import card5Juarez from '../../assets/juarez/card-5-juarez.jpg'
+import card6Ricardo from '../../assets/ricardo/card-6-ricardo.jpg'
+import card7Ed from '../../assets/ed/card-7-ed.jpg'
+import tribunalMesaImg from '../../assets/outros/tribunal-mesa.png'
 import { useGame } from '../../context/gameContextInstance'
 import { COUNCIL_MEMBERS } from '../../data/conselhoNextData'
 import VisualNovelOverlay from '../vn/VisualNovelOverlay'
 
 const MEMBER_CARD_IMAGES = {
-  1: card1Valdir,
+  1: card1Andre,
   2: card2Ramon,
   3: card3Vanessa,
   4: card4Jhonny,

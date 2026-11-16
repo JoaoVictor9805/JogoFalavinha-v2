@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Backend Node.js estruturado para o Escape Room Virtual Falavinha v2 (em espera para próxima etapa).",
   "scripts": {
-    "dev": "node --watch src/server.js",
+    "dev": "nodemon --legacy-watch --watch src --ext js,mjs,json src/server.js",
     "start": "node src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
@@ -21,6 +21,7 @@
     "express": "^4.21.2"
   },
   "devDependencies": {
+    "nodemon": "^3.1.9",
     "prisma": "6.4.1"
   }
 }

@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import prisma from '../db.js'
+import { formatarDataBrasilia } from '../utils/dateFormatter.js'
 
 const router = Router()
 
@@ -9,7 +10,7 @@ const router = Router()
  */
 router.post('/iniciar', async (req, res) => {
   try {
-    const { jogadorId } = req.body
+    const { jogadorId, forceNew } = req.body
 
     if (!jogadorId) {
       return res.status(400).json({ erro: 'ID do jogador é obrigatório.' })
@@ -23,20 +24,37 @@ router.post('/iniciar', async (req, res) => {
       return res.status(404).json({ erro: 'Jogador não encontrado.' })
     }
 
-    // Busca se já existe partida em andamento para este jogador (retomar)
-    let partida = await prisma.partida.findFirst({
-      where: {
-        jogadorId,
-        status: 'EM_ANDAMENTO',
-      },
-      include: {
-        opcoesDesabilitadas: true,
-        jogador: {
-          select: { id: true, nome: true, email: true, unidade: true, setor: true },
+    // Se for solicitado forceNew (ex: Jogar Novamente a partir do Ranking), encerra qualquer partida pendente
+    if (forceNew) {
+      await prisma.partida.updateMany({
+        where: {
+          jogadorId,
+          status: 'EM_ANDAMENTO',
         },
-      },
-      orderBy: { iniciadoEm: 'desc' },
-    })
+        data: {
+          status: 'CANCELADA',
+          finalizadoEm: new Date(),
+        },
+      })
+    }
+
+    // Busca se já existe partida em andamento para este jogador (retomar)
+    let partida = null
+    if (!forceNew) {
+      partida = await prisma.partida.findFirst({
+        where: {
+          jogadorId,
+          status: 'EM_ANDAMENTO',
+        },
+        include: {
+          opcoesDesabilitadas: true,
+          jogador: {
+            select: { id: true, nome: true, email: true, unidade: true, setor: true },
+          },
+        },
+        orderBy: { iniciadoEm: 'desc' },
+      })
+    }
 
     // Se não existir partida aberta, cria uma nova
     if (!partida) {
@@ -64,6 +82,84 @@ router.post('/iniciar', async (req, res) => {
   } catch (error) {
     console.error('[partidas/iniciar] Erro:', error)
     return res.status(500).json({ erro: 'Erro interno ao iniciar partida.' })
+  }
+})
+
+/**
+ * GET /api/partidas/jogador/:jogadorId/historico
+ * Retorna todas as tentativas concluídas do colaborador ordenadas, com numeração e recorde.
+ */
+router.get('/jogador/:jogadorId/historico', async (req, res) => {
+  try {
+    const { jogadorId } = req.params
+
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(jogadorId)
+    if (!isUuid) {
+      return res.status(400).json({ erro: 'ID do jogador inválido.' })
+    }
+
+    const jogador = await prisma.jogador.findUnique({
+      where: { id: jogadorId },
+      select: { id: true, nome: true, email: true, unidade: true, setor: true },
+    })
+
+    if (!jogador) {
+      return res.status(404).json({ erro: 'Jogador não encontrado.' })
+    }
+
+    // Busca todas as partidas concluídas ordenadas cronologicamente para numerar 1, 2, 3...
+    const partidasConcluidas = await prisma.partida.findMany({
+      where: {
+        jogadorId: jogador.id,
+        status: 'CONCLUIDA',
+      },
+      orderBy: { iniciadoEm: 'asc' },
+      select: {
+        id: true,
+        iniciadoEm: true,
+        finalizadoEm: true,
+        segundosReais: true,
+        segundosPenalidade: true,
+        segundosTotais: true,
+        totalErros: true,
+        etapaAtual: true,
+      },
+    })
+
+    // Localiza a melhor partida (menor tempo oficial e desempate por menos erros)
+    let melhorPartida = null
+    if (partidasConcluidas.length > 0) {
+      melhorPartida = [...partidasConcluidas].sort((a, b) => {
+        if (a.segundosTotais !== b.segundosTotais) {
+          return a.segundosTotais - b.segundosTotais
+        }
+        return a.totalErros - b.totalErros
+      })[0]
+    }
+
+    // Mapeia atribuindo número da tentativa de 1 a N
+    const tentativasNumeradas = partidasConcluidas.map((p, idx) => ({
+      id: p.id,
+      tentativaNumero: idx + 1,
+      isMelhorTempo: melhorPartida ? p.id === melhorPartida.id : false,
+      segundosReais: p.segundosReais,
+      segundosPenalidade: p.segundosPenalidade,
+      segundosTotais: p.segundosTotais,
+      totalErros: p.totalErros,
+      completedAt: formatarDataBrasilia(p.finalizadoEm),
+      startedAt: formatarDataBrasilia(p.iniciadoEm),
+    }))
+
+    // Inverte para exibição visual: tentativa mais recente primeiro
+    return res.json({
+      jogador,
+      totalTentativas: partidasConcluidas.length,
+      melhorPartida,
+      tentativas: [...tentativasNumeradas].reverse(),
+    })
+  } catch (error) {
+    console.error('[partidas/historico] Erro:', error)
+    return res.status(500).json({ erro: 'Erro interno ao buscar histórico de tentativas.' })
   }
 })
 

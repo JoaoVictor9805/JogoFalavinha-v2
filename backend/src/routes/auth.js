@@ -11,9 +11,9 @@ router.post('/cadastrar', async (req, res) => {
   try {
     const { nome, email, unidade, setor, senha } = req.body
 
-    if (!nome?.trim() || !email?.trim()) {
+    if (!nome?.trim() || !email?.trim() || !String(senha || '').trim()) {
       return res.status(400).json({
-        erro: 'Nome e e-mail são obrigatórios para o cadastro.',
+        erro: 'Nome, e-mail e senha são obrigatórios para o cadastro.',
       })
     }
 
@@ -36,7 +36,7 @@ router.post('/cadastrar', async (req, res) => {
         email: emailNormalizado,
         unidade: unidade?.trim() || 'Curitiba - Matriz',
         setor: setor?.trim() || 'Geral',
-        senha: senha ? String(senha).trim() : null,
+        senha: String(senha).trim(),
       },
       select: {
         id: true,
@@ -93,8 +93,11 @@ router.post('/login', async (req, res) => {
       })
     }
 
-    // Se o jogador possui senha cadastrada, verifica correspondência
-    if (jogador.senha && senha) {
+    // Se o jogador possui senha cadastrada, exige e verifica correspondência
+    if (jogador.senha) {
+      if (!senha || !String(senha).trim()) {
+        return res.status(401).json({ erro: 'Informe sua senha para entrar.' })
+      }
       if (jogador.senha !== String(senha).trim()) {
         return res.status(401).json({ erro: 'Senha incorreta. Tente novamente.' })
       }
