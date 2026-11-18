@@ -2,9 +2,26 @@ import 'dotenv/config'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import express from 'express'
-import rateLimit from 'express-rate-limit'
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
 import helmet from 'helmet'
 import apiRouter from './routes/index.js'
+import { SESSION_COOKIE_NAME, verifySessionToken } from './utils/jwt.js'
+
+function getAuthenticatedUserId(req) {
+  const token = req.cookies?.[SESSION_COOKIE_NAME]
+  if (!token) return null
+  try {
+    const decoded = verifySessionToken(token)
+    return typeof decoded?.sub === 'string' ? decoded.sub : null
+  } catch {
+    return null
+  }
+}
+
+function getNormalizedEmailFromBody(req) {
+  const email = req.body?.email
+  return typeof email === 'string' ? email.trim().toLowerCase().slice(0, 120) : ''
+}
 
 export function createApp() {
   const app = express()
@@ -28,29 +45,76 @@ export function createApp() {
   app.use(cookieParser())
   app.use(express.json({ limit: '50kb' }))
 
-  const apiLimiter = rateLimit({
+  // Teto global amplo por IP pensando em rede corporativa (200+ pessoas atrás do mesmo NAT/Wi-Fi)
+  const ipFloodLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 300,
+    max: 3000,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: {
-      erro: 'Muitas requisições em sequência. Aguarde alguns segundos e tente novamente.',
+      erro: 'Muitas requisições simultâneas na rede. Aguarde alguns segundos e tente novamente.',
     },
   })
 
-  const authLimiter = rateLimit({
+  // Limite individual por colaborador autenticado (não afeta colegas no mesmo IP)
+  const userSessionLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 120,
+    skip: (req) => !getAuthenticatedUserId(req),
+    keyGenerator: (req) => `user:${getAuthenticatedUserId(req)}`,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: {
+      erro: 'Muitas ações em sequência. Aguarde alguns segundos e tente novamente.',
+    },
+  })
+
+  // Proteção anti brute-force no login por par (IP + e-mail): 200 colegas diferentes não colidem entre si
+  const loginAccountLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 60,
+    max: 10,
+    skipSuccessfulRequests: true,
+    keyGenerator: (req) => {
+      const ipKey = ipKeyGenerator(req.ip || '127.0.0.1')
+      const email = getNormalizedEmailFromBody(req)
+      return email ? `${ipKey}:${email}` : ipKey
+    },
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: {
-      erro: 'Muitas tentativas de acesso. Aguarde alguns minutos antes de tentar novamente.',
+      erro: 'Muitas tentativas de login incorretas para este e-mail. Aguarde 15 minutos e tente novamente.',
     },
   })
 
-  app.use('/api', apiLimiter)
-  app.use('/api/auth/login', authLimiter)
-  app.use('/api/auth/cadastrar', authLimiter)
+  // Proteção no cadastro: por par (IP + e-mail) + teto folgado por IP para evento com 200+ pessoas
+  const registerEmailLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    keyGenerator: (req) => {
+      const ipKey = ipKeyGenerator(req.ip || '127.0.0.1')
+      const email = getNormalizedEmailFromBody(req)
+      return email ? `${ipKey}:${email}` : ipKey
+    },
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: {
+      erro: 'Muitas tentativas de cadastro para este e-mail. Aguarde alguns minutos.',
+    },
+  })
+
+  const registerIpCeilingLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 500,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: {
+      erro: 'Limite temporário de novos cadastros na rede atingido. Aguarde alguns minutos.',
+    },
+  })
+
+  app.use('/api', ipFloodLimiter, userSessionLimiter)
+  app.use('/api/auth/login', loginAccountLimiter)
+  app.use('/api/auth/cadastrar', registerEmailLimiter, registerIpCeilingLimiter)
 
   app.use('/api', apiRouter)
 

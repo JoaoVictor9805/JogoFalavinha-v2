@@ -364,4 +364,36 @@ describe('Escape Room Falavinha v2 — API & Regras de Negócio', () => {
     assert.equal(op.qualificado, true)
     assert.ok(op.participantesConcluidos >= 3)
   })
+
+  test('Rate Limit corporativo (NAT): bloqueia brute-force em 1 e-mail sem bloquear outros colegas no mesmo IP', async () => {
+    const emailAlvo = makeTestEmail('bruteforce.alvo')
+    const emailColega = makeTestEmail('bruteforce.colega')
+    await registerPlayer({ nome: 'Alvo', email: emailAlvo, senha: 'SenhaAlvo123' })
+    await registerPlayer({ nome: 'Colega', email: emailColega, senha: 'SenhaColega123' })
+
+    // 10 tentativas erradas no mesmo e-mail passam (retornam 401), a 11ª retorna 429
+    for (let i = 0; i < 10; i += 1) {
+      const r = await fetch(`${baseUrl}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailAlvo, senha: 'SenhaErrada99' }),
+      })
+      assert.equal(r.status, 401)
+    }
+
+    const blocked = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: emailAlvo, senha: 'SenhaErrada99' }),
+    })
+    assert.equal(blocked.status, 429)
+
+    // Colega no mesmo IP consegue logar normalmente
+    const colegaRes = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: emailColega, senha: 'SenhaColega123' }),
+    })
+    assert.equal(colegaRes.status, 200)
+  })
 })
