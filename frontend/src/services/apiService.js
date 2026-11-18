@@ -1,32 +1,46 @@
 /**
  * Serviço de comunicação HTTP com a API Backend do Jogo Falavinha v2.
- * Utiliza o proxy configurado no Vite (/api).
+ * Utiliza cookies httpOnly para sessão autenticada.
  */
 
-const BASE_URL = '/api'
+const BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
 async function request(endpoint, options = {}) {
   const config = {
+    credentials: 'include',
+    ...options,
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
-    ...options,
   }
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, config)
+  let response
+  try {
+    response = await fetch(`${BASE_URL}${endpoint}`, config)
+  } catch {
+    const netErr = new Error(
+      'Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.'
+    )
+    netErr.isNetworkError = true
+    throw netErr
+  }
+
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {
-    const errorMsg = data?.erro || data?.error || `Erro HTTP ${response.status}`
-    throw new Error(errorMsg)
+    const errorMsg = data?.erro || data?.error || `Erro ao comunicar com o servidor (${response.status}).`
+    const err = new Error(errorMsg)
+    err.status = response.status
+    err.data = data
+    throw err
   }
 
   return data
 }
 
 export const apiService = {
-  // Autenticação
+  // Autenticação & Sessão
   async cadastrar(dados) {
     return request('/auth/cadastrar', {
       method: 'POST',
@@ -41,17 +55,37 @@ export const apiService = {
     })
   },
 
+  async obterSessao() {
+    return request('/auth/me')
+  },
+
+  async logout() {
+    return request('/auth/logout', {
+      method: 'POST',
+    })
+  },
+
   // Desafios (Conselho Next)
   async obterDesafios() {
     return request('/desafios')
   },
 
   // Partidas e Validação
-  async iniciarPartida(jogadorId, { forceNew = false } = {}) {
+  async iniciarPartida({ forceNew = false } = {}) {
     return request('/partidas/iniciar', {
       method: 'POST',
-      body: JSON.stringify({ jogadorId, forceNew }),
+      body: JSON.stringify({ forceNew }),
     })
+  },
+
+  async iniciarCronometro(partidaId) {
+    return request(`/partidas/${partidaId}/iniciar-cronometro`, {
+      method: 'POST',
+    })
+  },
+
+  async obterMeuHistorico() {
+    return request('/partidas/meu-historico')
   },
 
   async obterHistoricoTentativas(jogadorId) {
@@ -85,4 +119,3 @@ export const apiService = {
     return request('/ranking/setores')
   },
 }
-

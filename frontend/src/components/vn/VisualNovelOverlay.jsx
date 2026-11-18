@@ -1,50 +1,49 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
+  AlertCircle,
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
   ChevronsRight,
-  KeyRound,
   Play,
-  Send,
   XCircle,
 } from 'lucide-react'
-import cutout1AndrePose1 from '../../assets/andre/cutout-1-andre-pose1.png'
-import cutout1AndrePose2 from '../../assets/andre/cutout-1-andre-pose2.png'
-import cutout1AndrePose3 from '../../assets/andre/cutout-1-andre-pose3.png'
-import cutout1AndreWrong from '../../assets/andre/cutout-1-andre-wrong.png'
-import cutout1AndreSuccess from '../../assets/andre/cutout-1-andre-success.png'
-import cutout2RamonPose1 from '../../assets/ramon/cutout-2-ramon-pose1.png'
-import cutout2RamonPose2 from '../../assets/ramon/cutout-2-ramon-pose2.png'
-import cutout2RamonPose3 from '../../assets/ramon/cutout-2-ramon-pose3.png'
-import cutout2RamonWrong from '../../assets/ramon/cutout-2-ramon-wrong.png'
-import cutout2RamonSuccess from '../../assets/ramon/cutout-2-ramon-success.png'
-import cutout3VanessaPose1 from '../../assets/vanessa/cutout-3-vanessa-pose1.png'
-import cutout3VanessaPose2 from '../../assets/vanessa/cutout-3-vanessa-pose2.png'
-import cutout3VanessaPose3 from '../../assets/vanessa/cutout-3-vanessa-pose3.png'
-import cutout3VanessaWrong from '../../assets/vanessa/cutout-3-vanessa-wrong.png'
-import cutout3VanessaSuccess from '../../assets/vanessa/cutout-3-vanessa-success.png'
-import cutout4JhonnyPose1 from '../../assets/jhonny/cutout-4-jhonny-pose1.png'
-import cutout4JhonnyPose2 from '../../assets/jhonny/cutout-4-jhonny-pose2.png'
-import cutout4JhonnyPose3 from '../../assets/jhonny/cutout-4-jhonny-pose3.png'
-import cutout4JhonnyWrong from '../../assets/jhonny/cutout-4-jhonny-wrong.png'
-import cutout4JhonnySuccess from '../../assets/jhonny/cutout-4-jhonny-success.png'
-import cutout5JuarezPose1 from '../../assets/juarez/cutout-5-juarez-pose1.png'
-import cutout5JuarezPose2 from '../../assets/juarez/cutout-5-juarez-pose2.png'
-import cutout5JuarezPose3 from '../../assets/juarez/cutout-5-juarez-pose3.png'
-import cutout5JuarezWrong from '../../assets/juarez/cutout-5-juarez-wrong.png'
-import cutout5JuarezSuccess from '../../assets/juarez/cutout-5-juarez-success.png'
-import cutout6RicardoPose1 from '../../assets/ricardo/cutout-6-ricardo-pose1.png'
-import cutout6RicardoPose2 from '../../assets/ricardo/cutout-6-ricardo-pose2.png'
-import cutout6RicardoPose3 from '../../assets/ricardo/cutout-6-ricardo-pose3.png'
-import cutout6RicardoWrong from '../../assets/ricardo/cutout-6-ricardo-wrong.png'
-import cutout6RicardoSuccess from '../../assets/ricardo/cutout-6-ricardo-success.png'
-import cutout7EdPose1 from '../../assets/ed/cutout-7-ed-pose1.png'
-import cutout7EdPose2 from '../../assets/ed/cutout-7-ed-pose2.png'
-import cutout7EdPose3 from '../../assets/ed/cutout-7-ed-pose3.png'
-import cutout7EdWrong from '../../assets/ed/cutout-7-ed-wrong.png'
-import cutout7EdSuccess from '../../assets/ed/cutout-7-ed-success.png'
-import tribunalMesaSoloImg from '../../assets/outros/tribunal-mesa-solo.png'
+import cutout1AndrePose1 from '../../assets/andre/cutout-1-andre-pose1.webp'
+import cutout1AndrePose2 from '../../assets/andre/cutout-1-andre-pose2.webp'
+import cutout1AndrePose3 from '../../assets/andre/cutout-1-andre-pose3.webp'
+import cutout1AndreWrong from '../../assets/andre/cutout-1-andre-wrong.webp'
+import cutout1AndreSuccess from '../../assets/andre/cutout-1-andre-success.webp'
+import cutout2RamonPose1 from '../../assets/ramon/cutout-2-ramon-pose1.webp'
+import cutout2RamonPose2 from '../../assets/ramon/cutout-2-ramon-pose2.webp'
+import cutout2RamonPose3 from '../../assets/ramon/cutout-2-ramon-pose3.webp'
+import cutout2RamonWrong from '../../assets/ramon/cutout-2-ramon-wrong.webp'
+import cutout2RamonSuccess from '../../assets/ramon/cutout-2-ramon-success.webp'
+import cutout3VanessaPose1 from '../../assets/vanessa/cutout-3-vanessa-pose1.webp'
+import cutout3VanessaPose2 from '../../assets/vanessa/cutout-3-vanessa-pose2.webp'
+import cutout3VanessaPose3 from '../../assets/vanessa/cutout-3-vanessa-pose3.webp'
+import cutout3VanessaWrong from '../../assets/vanessa/cutout-3-vanessa-wrong.webp'
+import cutout3VanessaSuccess from '../../assets/vanessa/cutout-3-vanessa-success.webp'
+import cutout4JhonnyPose1 from '../../assets/jhonny/cutout-4-jhonny-pose1.webp'
+import cutout4JhonnyPose2 from '../../assets/jhonny/cutout-4-jhonny-pose2.webp'
+import cutout4JhonnyPose3 from '../../assets/jhonny/cutout-4-jhonny-pose3.webp'
+import cutout4JhonnyWrong from '../../assets/jhonny/cutout-4-jhonny-wrong.webp'
+import cutout4JhonnySuccess from '../../assets/jhonny/cutout-4-jhonny-success.webp'
+import cutout5JuarezPose1 from '../../assets/juarez/cutout-5-juarez-pose1.webp'
+import cutout5JuarezPose2 from '../../assets/juarez/cutout-5-juarez-pose2.webp'
+import cutout5JuarezPose3 from '../../assets/juarez/cutout-5-juarez-pose3.webp'
+import cutout5JuarezWrong from '../../assets/juarez/cutout-5-juarez-wrong.webp'
+import cutout5JuarezSuccess from '../../assets/juarez/cutout-5-juarez-success.webp'
+import cutout6RicardoPose1 from '../../assets/ricardo/cutout-6-ricardo-pose1.webp'
+import cutout6RicardoPose2 from '../../assets/ricardo/cutout-6-ricardo-pose2.webp'
+import cutout6RicardoPose3 from '../../assets/ricardo/cutout-6-ricardo-pose3.webp'
+import cutout6RicardoWrong from '../../assets/ricardo/cutout-6-ricardo-wrong.webp'
+import cutout6RicardoSuccess from '../../assets/ricardo/cutout-6-ricardo-success.webp'
+import cutout7EdPose1 from '../../assets/ed/cutout-7-ed-pose1.webp'
+import cutout7EdPose2 from '../../assets/ed/cutout-7-ed-pose2.webp'
+import cutout7EdPose3 from '../../assets/ed/cutout-7-ed-pose3.webp'
+import cutout7EdWrong from '../../assets/ed/cutout-7-ed-wrong.webp'
+import cutout7EdSuccess from '../../assets/ed/cutout-7-ed-success.webp'
+import tribunalMesaSoloImg from '../../assets/outros/tribunal-mesa-solo.webp'
 import { useGame } from '../../context/gameContextInstance'
 import { CEO_TRIBUNAL_BRIEFING, COUNCIL_MEMBERS, getErrorDialogue } from '../../data/conselhoNextData'
 import { useTypewriter } from '../../hooks/useTypewriter'
@@ -162,13 +161,14 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     memberProgress,
     vnFeedback,
     isLocked,
+    penaltyAlertSeconds,
+    actionError,
+    clearActionError,
     closeMemberDialog,
     submitMultipleChoice,
-    submitTextAnswer,
     openIntroMazeModal,
   } = useGame()
 
-  const [textValue, setTextValue] = useState('')
   const [poseIndex, setPoseIndex] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
   const [posePulseKey, setPosePulseKey] = useState(0)
@@ -226,7 +226,6 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     completed: false,
     errors: 0,
     disabledOptions: [],
-    wrongTextAttempts: [],
   }
 
   const localMemberMeta = memberId
@@ -440,14 +439,6 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
   const speakerRole = isCeoIntro
     ? CEO_TRIBUNAL_BRIEFING.title
     : activeMember.role || localMemberMeta?.role || theme.role
-
-  const handleTextSubmit = (e) => {
-    e.preventDefault()
-    if (isLocked || isApprovedState || !textValue.trim() || !activeMember) return
-    const submitted = textValue
-    setTextValue('')
-    submitTextAnswer(activeMember.id, submitted)
-  }
 
   const speakerTagClass = isApprovedState
     ? 'bg-emerald-600 text-white border-stone-900'
@@ -711,12 +702,16 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
               {/* Badge/Carimbo Animado estilo Ace Attorney na frente da mesa (Acerto / Erro) */}
               {isShowingWrongPose && (
                 <div
-                  key={`wrong-stamp-${progress.errors}`}
+                  key={`wrong-stamp-${progress.errors}-${penaltyAlertSeconds}`}
                   className="absolute -top-4 right-2 sm:right-4 z-30 animate-vn-stamp"
                 >
                   <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-red-600 text-white border-2 border-stone-950 shadow-[4px_4px_0px_#1C1917] font-black text-xs sm:text-sm uppercase tracking-[0.16em]">
                     <XCircle className="w-4 h-4 shrink-0" />
-                    <span>OBJEÇÃO! +5s</span>
+                    <span>
+                      {penaltyAlertSeconds >= 10
+                        ? `REPROVADO! +${penaltyAlertSeconds}s`
+                        : `OBJEÇÃO! +${penaltyAlertSeconds || 5}s`}
+                    </span>
                   </div>
                 </div>
               )}
@@ -787,128 +782,103 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                   <h3 className="text-lg sm:text-2xl font-bold text-stone-900 leading-snug">
                     {activeMember.question}
                   </h3>
+                  {progress.errors === 2 && !isApprovedState && (
+                    <p className="text-[11px] font-black uppercase tracking-[0.14em] text-red-600">
+                      Atenção: próximo erro aplica +10s e bloqueia o conselheiro por 10s!
+                    </p>
+                  )}
                 </div>
 
-                {activeMember.type === 'multiple_choice' ? (
-                  <div className="space-y-2.5">
-                    {activeMember.options?.map((option, optIdx) => {
-                      const isOptionDisabled = progress.disabledOptions.includes(option.id)
-                      const isHighlightedSuccess = isApprovedState && selectedOptionId === option.id
-
-                      return (
-                        <button
-                          key={option.id}
-                          type="button"
-                          disabled={isLocked || isOptionDisabled || isApprovedState}
-                          onMouseEnter={() => {
-                            if (!isOptionDisabled && !isApprovedState) {
-                              setHoveredOptionId(option.id)
-                            }
-                          }}
-                          onMouseLeave={() => setHoveredOptionId(null)}
-                          onFocus={() => {
-                            if (!isOptionDisabled && !isApprovedState) {
-                              setHoveredOptionId(option.id)
-                            }
-                          }}
-                          onBlur={() => setHoveredOptionId(null)}
-                          onClick={() => {
-                            setHoveredOptionId(null)
-                            setSelectedOptionId(option.id)
-                            submitMultipleChoice(activeMember.id, option.id)
-                          }}
-                          style={{ animationDelay: `${optIdx * 60}ms` }}
-                          className={`group w-full text-left p-4 border-2 flex items-center justify-between gap-3 animate-panel-rise transition-all duration-200 ${
-                            isHighlightedSuccess
-                              ? 'bg-emerald-50 border-emerald-600 text-emerald-950 shadow-[3px_3px_0px_#059669]'
-                              : isOptionDisabled
-                                ? 'bg-red-50/70 border-red-200 text-stone-400 cursor-not-allowed'
-                                : 'bg-white hover:bg-[#F5F0E6] border-stone-300 hover:border-stone-900 hover:-translate-y-0.5 hover:shadow-[3px_3px_0px_#1C1917] text-stone-800 cursor-pointer active:scale-[0.995] disabled:opacity-60 disabled:pointer-events-none'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3.5">
-                            <span
-                              className={`w-8 h-8 font-mono text-xs font-black flex items-center justify-center shrink-0 transition-colors ${
-                                isHighlightedSuccess
-                                  ? 'bg-emerald-600 text-white'
-                                  : isOptionDisabled
-                                    ? 'bg-red-100 text-red-500 border border-red-200'
-                                    : 'bg-stone-900 text-white group-hover:bg-[#D99B38] group-hover:text-stone-950'
-                              }`}
-                            >
-                              {option.label}
-                            </span>
-                            <span
-                              className={`text-sm sm:text-base font-semibold leading-snug ${
-                                isOptionDisabled ? 'line-through text-stone-400' : 'text-stone-800'
-                              }`}
-                            >
-                              {option.text}
-                            </span>
-                          </div>
-
-                          {isOptionDisabled && (
-                            <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 shrink-0">
-                              <XCircle className="w-4 h-4" />
-                              <span>+5s</span>
-                            </span>
-                          )}
-
-                          {isHighlightedSuccess && (
-                            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 shrink-0">
-                              <CheckCircle2 className="w-4 h-4" />
-                              <span>Correta</span>
-                            </span>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <form onSubmit={handleTextSubmit} className="flex flex-col sm:flex-row gap-3">
-                      <div className="relative flex-1 group">
-                        <KeyRound className="w-4 h-4 text-stone-400 group-focus-within:text-[#B87D1E] absolute left-4 top-1/2 -translate-y-1/2 transition-colors" />
-                        <input
-                          type="text"
-                          value={textValue}
-                          onChange={(e) => setTextValue(e.target.value)}
-                          onFocus={() => setHoveredOptionId('text-input')}
-                          onBlur={() => setHoveredOptionId(null)}
-                          disabled={isLocked || isApprovedState}
-                          placeholder={activeMember.placeholder || 'Digite sua resposta...'}
-                          autoFocus
-                          className="w-full pl-11 pr-4 py-3.5 bg-white border-2 border-stone-300 text-stone-900 placeholder-stone-400 text-sm sm:text-base font-semibold focus:outline-none focus:border-[#D99B38] disabled:opacity-50 transition-colors"
-                        />
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={isLocked || isApprovedState || !textValue.trim()}
-                        className="inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-[#D99B38] hover:bg-[#c58927] text-stone-950 border-2 border-stone-900 font-black text-xs sm:text-sm uppercase tracking-widest shadow-[3px_3px_0px_#1C1917] hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_#1C1917] active:scale-95 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
-                      >
-                        <Send className="w-4 h-4" />
-                        <span>Confirmar</span>
-                      </button>
-                    </form>
-
-                    {progress.wrongTextAttempts.length > 0 && (
-                      <div className="flex items-center gap-2 flex-wrap pt-1">
-                        <span className="text-xs font-semibold text-stone-500">
-                          Palpites incorretos (+5s):
-                        </span>
-                        {progress.wrongTextAttempts.map((attempt) => (
-                          <span
-                            key={attempt}
-                            className="px-2.5 py-0.5 bg-red-50 border border-red-200 text-xs font-mono font-semibold text-red-700 line-through"
-                          >
-                            {attempt}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                {actionError && (
+                  <div className="p-3 bg-red-50 border-2 border-red-600 flex items-center justify-between gap-2 text-red-800 text-xs font-semibold">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                      <span>{actionError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearActionError}
+                      className="text-[10px] font-black uppercase px-2 py-0.5 border border-red-400 hover:bg-red-100 cursor-pointer"
+                    >
+                      OK
+                    </button>
                   </div>
                 )}
+
+                <div className="space-y-2.5">
+                  {activeMember.options?.map((option, optIdx) => {
+                    const isOptionDisabled = progress.disabledOptions.includes(option.id)
+                    const isHighlightedSuccess = isApprovedState && selectedOptionId === option.id
+
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        disabled={isLocked || isOptionDisabled || isApprovedState}
+                        onMouseEnter={() => {
+                          if (!isOptionDisabled && !isApprovedState) {
+                            setHoveredOptionId(option.id)
+                          }
+                        }}
+                        onMouseLeave={() => setHoveredOptionId(null)}
+                        onFocus={() => {
+                          if (!isOptionDisabled && !isApprovedState) {
+                            setHoveredOptionId(option.id)
+                          }
+                        }}
+                        onBlur={() => setHoveredOptionId(null)}
+                        onClick={() => {
+                          setHoveredOptionId(null)
+                          setSelectedOptionId(option.id)
+                          submitMultipleChoice(activeMember.id, option.id)
+                        }}
+                        style={{ animationDelay: `${optIdx * 60}ms` }}
+                        className={`group w-full text-left p-4 border-2 flex items-center justify-between gap-3 animate-panel-rise transition-all duration-200 ${
+                          isHighlightedSuccess
+                            ? 'bg-emerald-50 border-emerald-600 text-emerald-950 shadow-[3px_3px_0px_#059669]'
+                            : isOptionDisabled
+                              ? 'bg-red-50/70 border-red-200 text-stone-400 cursor-not-allowed'
+                              : 'bg-white hover:bg-[#F5F0E6] border-stone-300 hover:border-stone-900 hover:-translate-y-0.5 hover:shadow-[3px_3px_0px_#1C1917] text-stone-800 cursor-pointer active:scale-[0.995] disabled:opacity-60 disabled:pointer-events-none'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3.5">
+                          <span
+                            className={`w-8 h-8 font-mono text-xs font-black flex items-center justify-center shrink-0 transition-colors ${
+                              isHighlightedSuccess
+                                ? 'bg-emerald-600 text-white'
+                                : isOptionDisabled
+                                  ? 'bg-red-100 text-red-500 border border-red-200'
+                                  : 'bg-stone-900 text-white group-hover:bg-[#D99B38] group-hover:text-stone-950'
+                            }`}
+                          >
+                            {option.label}
+                          </span>
+                          <span
+                            className={`text-sm sm:text-base font-semibold leading-snug ${
+                              isOptionDisabled ? 'line-through text-stone-400' : 'text-stone-800'
+                            }`}
+                          >
+                            {option.text}
+                          </span>
+                        </div>
+
+                        {isOptionDisabled && (
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 shrink-0">
+                            <XCircle className="w-4 h-4" />
+                            <span>+5s</span>
+                          </span>
+                        )}
+
+                        {isHighlightedSuccess && (
+                          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 shrink-0">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Correta</span>
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             )}
             </div>

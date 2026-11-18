@@ -1,19 +1,24 @@
-import { useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Clock, Compass, Shield, User } from 'lucide-react'
+import { Suspense, lazy, useEffect, useState } from 'react'
+import { AlertTriangle, CheckCircle2, Clock, Compass, Flame, Loader2, Shield, User } from 'lucide-react'
 import { useGame } from '../../context/gameContextInstance'
-import { COUNCIL_MEMBERS } from '../../data/conselhoNextData'
 import { formatarTempo } from '../../utils/validacaoDesafio'
-import MazeModal3D from '../maze3d/MazeModal3D'
 import { MAZE_STEPS } from '../maze3d/mazeData'
+
+const MazeModal3D = lazy(() => import('../maze3d/MazeModal3D'))
 
 function HudTimerHeader() {
   const {
     screen,
     player,
+    challenges,
     realSeconds,
     penaltySeconds,
+    bonusSeconds,
     totalSeconds,
+    comboAtual,
     penaltyAlertKey,
+    penaltyAlertSeconds,
+    comboAlert,
     completedCount,
     memberProgress,
     ceoBriefingDismissed,
@@ -23,16 +28,27 @@ function HudTimerHeader() {
     closeMazeModal,
   } = useGame()
 
-  const [dismissedAlertKey, setDismissedAlertKey] = useState(0)
-  const showPenaltyFlash = penaltyAlertKey > 0 && dismissedAlertKey !== penaltyAlertKey
+  const [dismissedPenaltyKey, setDismissedPenaltyKey] = useState(0)
+  const [dismissedComboKey, setDismissedComboKey] = useState(0)
+
+  const showPenaltyFlash = penaltyAlertKey > 0 && dismissedPenaltyKey !== penaltyAlertKey
+  const showComboFlash = comboAlert?.key > 0 && dismissedComboKey !== comboAlert.key
 
   useEffect(() => {
     if (penaltyAlertKey <= 0) return undefined
     const timer = setTimeout(() => {
-      setDismissedAlertKey(penaltyAlertKey)
-    }, 1400)
+      setDismissedPenaltyKey(penaltyAlertKey)
+    }, 1500)
     return () => clearTimeout(timer)
   }, [penaltyAlertKey])
+
+  useEffect(() => {
+    if (!comboAlert?.key) return undefined
+    const timer = setTimeout(() => {
+      setDismissedComboKey(comboAlert.key)
+    }, 2400)
+    return () => clearTimeout(timer)
+  }, [comboAlert?.key])
 
   const showSideHud =
     (screen === 'TRIBUNAL_HUB' && ceoBriefingDismissed) || screen === 'FINAL_RANKING'
@@ -43,13 +59,15 @@ function HudTimerHeader() {
     return null
   }
 
+  const totalMembers = challenges.length || MAZE_STEPS
+
   return (
     <>
       {/* HUD Superior: Identificação na esquerda + Cronômetro na direita */}
       {showSideHud && (
         <header className="fixed top-0 inset-x-0 z-50 pointer-events-none py-3 px-4 sm:px-8 animate-hud-enter">
           <div className="max-w-6xl w-full mx-auto flex items-start justify-between gap-4">
-            {/* Bloco Esquerdo Flutuante: Identificação + Progresso de Aprovações */}
+            {/* Bloco Esquerdo Flutuante: Identificação + Progresso + Combo */}
             <div className="pointer-events-auto hidden sm:flex items-center gap-3.5 bg-[#FDFBF7]/95 backdrop-blur-md border-2 border-stone-800 border-l-4 border-l-[#D99B38] rounded-none px-3.5 py-2 shadow-[4px_4px_0px_#1C1917]">
               <div className="w-8 h-8 rounded-none bg-[#D99B38] text-stone-950 flex items-center justify-center shrink-0">
                 <Shield className="w-4 h-4" />
@@ -73,7 +91,7 @@ function HudTimerHeader() {
 
               <div className="flex items-center gap-2.5 pl-0.5">
                 <div className="flex items-center gap-1">
-                  {COUNCIL_MEMBERS.map((m) => {
+                  {challenges.map((m) => {
                     const isDone = memberProgress[m.id]?.completed
                     return (
                       <span
@@ -90,23 +108,45 @@ function HudTimerHeader() {
                 </div>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#F5F0E6] border border-stone-300 text-[11px] font-mono font-black text-stone-900">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                  <span>{completedCount}/7</span>
+                  <span>
+                    {completedCount}/{totalMembers}
+                  </span>
                 </span>
+
+                {screen === 'TRIBUNAL_HUB' && (
+                  <span
+                    title="Sequência atual de acertos de primeira (3 seguidos = -5s)"
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 border text-[10px] font-mono font-black transition-colors ${
+                      comboAtual > 0
+                        ? 'bg-amber-100 border-amber-500 text-amber-900'
+                        : 'bg-stone-100 border-stone-300 text-stone-500'
+                    }`}
+                  >
+                    <Flame className="w-3 h-3 text-[#B87D1E]" />
+                    <span>{comboAtual}/3</span>
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Bloco Direito Flutuante: Cronômetro Global + Alerta de Penalidade ao lado */}
+            {/* Bloco Direito Flutuante: Cronômetro Global + Alerta de Penalidade / Combo */}
             <div className="pointer-events-auto ml-auto relative">
               <div
                 className={`flex items-center gap-3.5 bg-[#FDFBF7]/95 backdrop-blur-md border-2 rounded-none px-3.5 sm:px-4 py-2 shadow-[4px_4px_0px_#1C1917] transition-all duration-300 ${
                   showPenaltyFlash
                     ? 'border-red-600 border-r-4 border-r-red-600 scale-[1.03]'
-                    : 'border-stone-800 border-r-4 border-r-[#D99B38]'
+                    : showComboFlash
+                      ? 'border-emerald-600 border-r-4 border-r-emerald-600 scale-[1.03]'
+                      : 'border-stone-800 border-r-4 border-r-[#D99B38]'
                 }`}
               >
                 <div
                   className={`w-8 h-8 rounded-none flex items-center justify-center shrink-0 transition-colors duration-300 ${
-                    showPenaltyFlash ? 'bg-red-600 text-white' : 'bg-[#D99B38] text-stone-950'
+                    showPenaltyFlash
+                      ? 'bg-red-600 text-white'
+                      : showComboFlash
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-[#D99B38] text-stone-950'
                   }`}
                 >
                   <Clock className="w-4 h-4" />
@@ -121,14 +161,18 @@ function HudTimerHeader() {
                   </div>
                 </div>
 
-                {penaltySeconds > 0 && (
-                  <div className="pl-3 border-l border-stone-300 text-right">
-                    <div className="text-[9px] font-black uppercase tracking-[0.16em] text-red-600 leading-tight">
-                      Penalidades
-                    </div>
-                    <div className="font-mono text-xs font-black text-red-600 leading-tight">
-                      +{penaltySeconds}s
-                    </div>
+                {(penaltySeconds > 0 || bonusSeconds > 0) && (
+                  <div className="pl-3 border-l border-stone-300 text-right space-y-0.5">
+                    {penaltySeconds > 0 && (
+                      <div className="font-mono text-[11px] font-black text-red-600 leading-tight">
+                        +{penaltySeconds}s erro
+                      </div>
+                    )}
+                    {bonusSeconds > 0 && (
+                      <div className="font-mono text-[11px] font-black text-emerald-700 leading-tight">
+                        -{bonusSeconds}s bônus
+                      </div>
+                    )}
                     <div className="text-[9px] text-stone-500 font-mono leading-tight">
                       Base: {formatarTempo(realSeconds)}
                     </div>
@@ -136,7 +180,7 @@ function HudTimerHeader() {
                 )}
               </div>
 
-              {/* Alerta flutuante de +5s ao lado esquerdo do relógio no desktop (ou abaixo no mobile) */}
+              {/* Alerta flutuante de penalidade (+5s ou +10s) */}
               <div
                 className={`absolute top-full right-0 mt-2 sm:top-1/2 sm:-translate-y-1/2 sm:right-full sm:mt-0 sm:mr-2.5 transition-all duration-300 ${
                   showPenaltyFlash
@@ -146,7 +190,21 @@ function HudTimerHeader() {
               >
                 <div className="flex items-center gap-1.5 bg-red-600 text-white text-[11px] font-black uppercase tracking-[0.18em] px-3.5 py-2 rounded-none shadow-[4px_4px_0px_#1C1917] border-2 border-stone-900">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  <span className="whitespace-nowrap">+5s de Penalidade!</span>
+                  <span className="whitespace-nowrap">+{penaltyAlertSeconds}s de Penalidade!</span>
+                </div>
+              </div>
+
+              {/* Alerta flutuante de bônus (Combo -5s / Invicto -10s) */}
+              <div
+                className={`absolute top-full right-0 mt-2 sm:top-1/2 sm:-translate-y-1/2 sm:right-full sm:mt-0 sm:mr-2.5 transition-all duration-300 ${
+                  showComboFlash && !showPenaltyFlash
+                    ? 'opacity-100 translate-y-0 sm:translate-x-0 scale-100'
+                    : 'opacity-0 -translate-y-2 sm:translate-y-0 sm:translate-x-2 scale-95 pointer-events-none'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 bg-emerald-600 text-white text-[11px] font-black uppercase tracking-[0.18em] px-3.5 py-2 rounded-none shadow-[4px_4px_0px_#1C1917] border-2 border-stone-900">
+                  <Flame className="w-3.5 h-3.5 shrink-0" />
+                  <span className="whitespace-nowrap">{comboAlert?.label || 'Bônus!'}</span>
                 </div>
               </div>
             </div>
@@ -165,20 +223,31 @@ function HudTimerHeader() {
             <Compass className="w-4 h-4 text-[#B87D1E] group-hover:text-stone-950 transition-colors" />
             <span>Visualizar Mapa</span>
             <span className="px-1.5 py-0.5 bg-[#F5F0E6] group-hover:bg-white/80 border border-stone-800 font-mono text-[10px]">
-              {completedCount}/{MAZE_STEPS}
+              {completedCount}/{totalMembers}
             </span>
           </button>
         </div>
       )}
 
-      {/* Modal 3D: Abertura do CEO, Avanço automático por resposta certa ou Visualização manual */}
+      {/* Modal 3D: Abertura do CEO, Avanço automático, Erro/Reprovação ou Visualização manual */}
       {showMazeModal && (
-        <MazeModal3D
-          key={`${mazeModal.mode}-${mazeModal.fromStep}-${mazeModal.toStep}`}
-          modalState={mazeModal}
-          onConfirmIntro={confirmIntroMazeAndStart}
-          onClose={closeMazeModal}
-        />
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-[60] bg-stone-950/60 backdrop-blur-[2px] flex items-center justify-center p-4">
+              <div className="bg-[#FDFBF7] border-2 border-stone-900 px-6 py-4 shadow-[6px_6px_0px_#1C1917] flex items-center gap-3 text-xs font-black uppercase tracking-[0.18em] text-stone-900">
+                <Loader2 className="w-4 h-4 animate-spin text-[#B87D1E]" />
+                <span>Carregando Maquete 3D...</span>
+              </div>
+            </div>
+          }
+        >
+          <MazeModal3D
+            key={`${mazeModal.mode}-${mazeModal.fromStep}-${mazeModal.toStep}`}
+            modalState={mazeModal}
+            onConfirmIntro={confirmIntroMazeAndStart}
+            onClose={closeMazeModal}
+          />
+        </Suspense>
       )}
     </>
   )

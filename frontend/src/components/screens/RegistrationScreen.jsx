@@ -3,6 +3,9 @@ import { AlertCircle, Building2, Key, Loader2, LogIn, Mail, Play, User, Users } 
 import { useGame } from '../../context/gameContextInstance'
 import { DEPARTMENTS_LIST, UNITS_LIST } from '../../data/conselhoNextData'
 
+const CORPORATE_EMAIL_REGEX = /^[a-z0-9._%+-]+@falavinha\.com\.br$/i
+const MIN_PASSWORD_LENGTH = 8
+
 function RegistrationScreen() {
   const {
     player,
@@ -61,8 +64,18 @@ function RegistrationScreen() {
     e.preventDefault()
     if (isLocked || isSubmitting) return
 
-    if (!registerForm.nome.trim() || !registerForm.email.trim() || !registerForm.senha.trim()) {
-      setLocalError('Por favor, preencha o nome, o e-mail corporativo e uma senha.')
+    if (!registerForm.nome.trim() || registerForm.nome.trim().length < 2) {
+      setLocalError('Por favor, informe seu nome completo (mínimo 2 caracteres).')
+      return
+    }
+
+    if (!CORPORATE_EMAIL_REGEX.test(registerForm.email.trim())) {
+      setLocalError('Utilize um e-mail corporativo válido terminado em @falavinha.com.br.')
+      return
+    }
+
+    if (registerForm.senha.trim().length < MIN_PASSWORD_LENGTH) {
+      setLocalError(`A senha deve ter no mínimo ${MIN_PASSWORD_LENGTH} caracteres.`)
       return
     }
 
@@ -81,8 +94,13 @@ function RegistrationScreen() {
     e.preventDefault()
     if (isLocked || isSubmitting) return
 
-    if (!loginForm.email.trim() || !loginForm.senha.trim()) {
-      setLocalError('Por favor, informe seu e-mail corporativo e sua senha.')
+    if (!CORPORATE_EMAIL_REGEX.test(loginForm.email.trim())) {
+      setLocalError('Informe um e-mail corporativo válido (@falavinha.com.br).')
+      return
+    }
+
+    if (!loginForm.senha) {
+      setLocalError('Por favor, informe sua senha cadastrada.')
       return
     }
 
@@ -214,7 +232,8 @@ function RegistrationScreen() {
                   name="senha"
                   type="password"
                   required
-                  placeholder="Crie uma senha simples (ex: 1234)"
+                  minLength={MIN_PASSWORD_LENGTH}
+                  placeholder="Mínimo 8 caracteres"
                   value={registerForm.senha}
                   onChange={handleRegisterChange}
                   disabled={isLocked || isSubmitting}

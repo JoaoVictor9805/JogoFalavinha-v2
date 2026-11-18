@@ -6,9 +6,9 @@
 export const ERROR_DIALOGUES = [
   'Vamos tentar de novo, preste mais atenção.',
   'Ainda não é isso. Pense nos nossos processos.',
-  'Você está chutando? Lembre-se que o tempo e os +5 segundos de penalidade estão correndo!',
+  'Você está chutando? Lembre-se que o tempo e as penalidades estão correndo!',
   'Concentre-se! Você consegue fazer melhor que isso.',
-  'Esta é sua última chance moral, pense bem antes de responder.',
+  'Atenção máxima antes de responder novamente!',
 ]
 
 export function getErrorDialogue(errorCount) {
@@ -74,12 +74,12 @@ export const CEO_TRIBUNAL_BRIEFING = {
   name: 'Jhonny',
   title: 'CEO · Presidente do Conselho',
   message:
-    'Bem-vindo ao Conselho Next! Diante de você estão as 7 lideranças da empresa, e você pode escolhê-las em qualquer ordem. A cada resposta correta, o colaborador avança uma etapa pelo labirinto 3D rumo à sala do cliente — e você verá cada passo dele no mapa. Mas cuidado: cada erro adiciona +5 segundos ao seu tempo. Clique em avançar para conhecer o labirinto e começar!',
+    'Bem-vindo ao Conselho Next! Diante de você estão as 7 lideranças da empresa, e você pode escolhê-las em qualquer ordem. Acertar 3 conselheiros seguidos de primeira dá -5s de bônus (e fechar invicto dá -10s extras!). Mas atenção: cada erro soma +5s e, no 3º erro na mesma cadeira, você leva +10s e o conselheiro fica bloqueado por 10s. Clique em avançar para conhecer o labirinto e começar!',
 }
 
 /**
- * Base de dados oficial dos 7 membros do Conselho Next.
- * Todas as 7 questões são de múltipla escolha (4 alternativas cada).
+ * Metadados base de fallback dos 7 membros do Conselho Next (SEM gabarito no frontend).
+ * A fonte oficial de perguntas e opções é `GET /api/desafios`, e toda validação é server-side.
  */
 export const COUNCIL_MEMBERS = [
   {
@@ -98,13 +98,11 @@ export const COUNCIL_MEMBERS = [
       'Vamos começar pelo básico sobre quem somos e onde estamos presentes. Mostre que conhece nossa estrutura!',
     question: 'Quantas unidades físicas temos?',
     options: [
-      { id: 'a', label: 'a)', text: '5', isCorrect: false },
-      { id: 'b', label: 'b)', text: '2', isCorrect: false },
-      { id: 'c', label: 'c)', text: '3', isCorrect: true },
-      { id: 'd', label: 'd)', text: '7', isCorrect: false },
+      { id: 'a', label: 'a)', text: '5' },
+      { id: 'b', label: 'b)', text: '2' },
+      { id: 'c', label: 'c)', text: '3' },
+      { id: 'd', label: 'd)', text: '7' },
     ],
-    approvalMessage:
-      'Resposta exata! Temos 3 unidades físicas. Você tem o meu voto de aprovação.',
   },
   {
     id: 2,
@@ -122,13 +120,11 @@ export const COUNCIL_MEMBERS = [
       'Nossos valores guiam cada decisão no dia a dia. Quero ver se você tem os pilares da Falavinha Next na ponta da língua.',
     question: 'Quais desses é um dos nossos valores?',
     options: [
-      { id: 'a', label: 'a)', text: 'Energia para transformar', isCorrect: true },
-      { id: 'b', label: 'b)', text: 'Comunicação assertiva', isCorrect: false },
-      { id: 'c', label: 'c)', text: 'Resultados rápidos', isCorrect: false },
-      { id: 'd', label: 'd)', text: 'Coletividade', isCorrect: false },
+      { id: 'a', label: 'a)', text: 'Energia para transformar' },
+      { id: 'b', label: 'b)', text: 'Comunicação assertiva' },
+      { id: 'c', label: 'c)', text: 'Resultados rápidos' },
+      { id: 'd', label: 'd)', text: 'Coletividade' },
     ],
-    approvalMessage:
-      'Excelente! Energia para transformar é um dos nossos valores essenciais. Aprovado!',
   },
   {
     id: 3,
@@ -146,18 +142,11 @@ export const COUNCIL_MEMBERS = [
       'Mais do que executar tarefas, existe uma mentalidade que define o nosso time. Responda com convicção:',
     question: 'O que é ser Next?',
     options: [
-      {
-        id: 'a',
-        label: 'a)',
-        text: 'É responder o cliente no mínimo 2 horas',
-        isCorrect: false,
-      },
-      { id: 'b', label: 'b)', text: 'É chegar atrasado', isCorrect: false },
-      { id: 'c', label: 'c)', text: 'É fazer ciências contábeis', isCorrect: false },
-      { id: 'd', label: 'd)', text: 'É gerar mais resultados', isCorrect: true },
+      { id: 'a', label: 'a)', text: 'É responder o cliente no mínimo 2 horas' },
+      { id: 'b', label: 'b)', text: 'É chegar atrasado' },
+      { id: 'c', label: 'c)', text: 'É fazer ciências contábeis' },
+      { id: 'd', label: 'd)', text: 'É gerar mais resultados' },
     ],
-    approvalMessage:
-      'Isso mesmo! Ser Next é gerar mais resultados todos os dias. Tem a minha aprovação!',
   },
   {
     id: 4,
@@ -176,13 +165,11 @@ export const COUNCIL_MEMBERS = [
     question:
       'Qual o único evento interno da empresa que obrigatoriamente acontece na última semana do mês?',
     options: [
-      { id: 'a', label: 'a)', text: 'Festa de final do ano', isCorrect: false },
-      { id: 'b', label: 'b)', text: 'Aniversário da empresa', isCorrect: false },
-      { id: 'c', label: 'c)', text: 'Dia da Pizza', isCorrect: true },
-      { id: 'd', label: 'd)', text: 'Outubro Rosa', isCorrect: false },
+      { id: 'a', label: 'a)', text: 'Festa de final do ano' },
+      { id: 'b', label: 'b)', text: 'Aniversário da empresa' },
+      { id: 'c', label: 'c)', text: 'Dia da Pizza' },
+      { id: 'd', label: 'd)', text: 'Outubro Rosa' },
     ],
-    approvalMessage:
-      'Acertou! O Dia da Pizza é tradição garantida na última semana do mês. Aprovado!',
   },
   {
     id: 5,
@@ -200,13 +187,11 @@ export const COUNCIL_MEMBERS = [
       'Organização começa no registro correto da nossa jornada. Qual ferramenta utilizamos para isso?',
     question: 'Qual o nome do sistema que batemos o ponto?',
     options: [
-      { id: 'a', label: 'a)', text: 'Epays', isCorrect: false },
-      { id: 'b', label: 'b)', text: 'Pontofopag', isCorrect: true },
-      { id: 'c', label: 'c)', text: 'Questor', isCorrect: false },
-      { id: 'd', label: 'd)', text: 'Sênior', isCorrect: false },
+      { id: 'a', label: 'a)', text: 'Epays' },
+      { id: 'b', label: 'b)', text: 'Pontofopag' },
+      { id: 'c', label: 'c)', text: 'Questor' },
+      { id: 'd', label: 'd)', text: 'Sênior' },
     ],
-    approvalMessage:
-      'Pontofopag confirmado! Registro de ponto em dia é compromisso básico. Meu voto é favorável!',
   },
   {
     id: 6,
@@ -224,13 +209,11 @@ export const COUNCIL_MEMBERS = [
       'Eficiência operacional exige as melhores ferramentas de gestão. Quero saber sua resposta sobre tecnologia:',
     question: 'Qual o melhor ERP do mercado?',
     options: [
-      { id: 'a', label: 'a)', text: 'Questor', isCorrect: false },
-      { id: 'b', label: 'b)', text: 'Epays', isCorrect: false },
-      { id: 'c', label: 'c)', text: 'CIGAM', isCorrect: true },
-      { id: 'd', label: 'd)', text: 'PontoMais', isCorrect: false },
+      { id: 'a', label: 'a)', text: 'Questor' },
+      { id: 'b', label: 'b)', text: 'Epays' },
+      { id: 'c', label: 'c)', text: 'CIGAM' },
+      { id: 'd', label: 'd)', text: 'PontoMais' },
     ],
-    approvalMessage:
-      'Exato! O CIGAM é a nossa referência como o melhor ERP do mercado. Está aprovado!',
   },
   {
     id: 7,
@@ -248,13 +231,10 @@ export const COUNCIL_MEMBERS = [
       'Nossa postura e apresentação também comunicam a seriedade da Falavinha Next. Para fechar o Conselho:',
     question: 'Qual o dress code correto de um colaborador da Falavinha Next?',
     options: [
-      { id: 'a', label: 'a)', text: 'Social', isCorrect: true },
-      { id: 'b', label: 'b)', text: 'Casual', isCorrect: false },
-      { id: 'c', label: 'c)', text: 'Esporte fino', isCorrect: false },
-      { id: 'd', label: 'd)', text: 'Passeio completo', isCorrect: false },
+      { id: 'a', label: 'a)', text: 'Social' },
+      { id: 'b', label: 'b)', text: 'Casual' },
+      { id: 'c', label: 'c)', text: 'Esporte fino' },
+      { id: 'd', label: 'd)', text: 'Passeio completo' },
     ],
-    approvalMessage:
-      'Dress code Social confirmado! Você demonstrou conhecer a essência da Falavinha Next. Tem a minha aprovação no Conselho!',
   },
 ]
-

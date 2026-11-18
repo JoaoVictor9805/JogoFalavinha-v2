@@ -28,22 +28,28 @@ model Jogador {
 
 // Sessão / Partida do colaborador
 model Partida {
-  id                  String               @id @default(uuid())
-  jogadorId           String               @map("jogador_id")
-  jogador             Jogador              @relation(fields: [jogadorId], references: [id], onDelete: Cascade)
-  status              String               @default("EM_ANDAMENTO") // "EM_ANDAMENTO" | "CONCLUIDA"
-  iniciadoEm          DateTime             @default(now()) @map("iniciado_em")
-  finalizadoEm        DateTime?            @map("finalizado_em")
-  segundosReais       Int                  @default(0) @map("segundos_reais")
-  segundosPenalidade  Int                  @default(0) @map("segundos_penalidade")
-  segundosTotais      Int                  @default(0) @map("segundos_totais")
-  totalErros          Int                  @default(0) @map("total_erros")
-  etapaAtual          Int                  @default(0) @map("etapa_atual") // 0 a 7 (progresso no labirinto)
-  membrosConcluidos   Int[]                @default([]) @map("membros_concluidos") // IDs dos membros já aprovados
-  tentativas          Tentativa[]
-  opcoesDesabilitadas OpcaoDesabilitada[]
-  criadoEm            DateTime             @default(now()) @map("criado_em")
-  atualizadoEm        DateTime             @updatedAt @map("atualizado_em")
+  id                   String                @id @default(uuid())
+  jogadorId            String                @map("jogador_id")
+  jogador              Jogador               @relation(fields: [jogadorId], references: [id], onDelete: Cascade)
+  status               String                @default("EM_ANDAMENTO") // "EM_ANDAMENTO" | "CONCLUIDA" | "CANCELADA"
+  iniciadoEm           DateTime              @default(now()) @map("iniciado_em")
+  cronometroIniciadoEm DateTime?             @map("cronometro_iniciado_em")
+  ultimoSyncEm         DateTime?             @map("ultimo_sync_em")
+  finalizadoEm         DateTime?             @map("finalizado_em")
+  segundosReais        Int                   @default(0) @map("segundos_reais")
+  segundosPenalidade   Int                   @default(0) @map("segundos_penalidade")
+  segundosBonus        Int                   @default(0) @map("segundos_bonus")
+  segundosTotais       Int                   @default(0) @map("segundos_totais")
+  totalErros           Int                   @default(0) @map("total_erros")
+  comboAtual           Int                   @default(0) @map("combo_atual")
+  totalCombos          Int                   @default(0) @map("total_combos")
+  etapaAtual           Int                   @default(0) @map("etapa_atual") // 0 a 7 (progresso no labirinto)
+  membrosConcluidos    Int[]                 @default([]) @map("membros_concluidos") // IDs dos membros já aprovados
+  tentativas           Tentativa[]
+  opcoesDesabilitadas  OpcaoDesabilitada[]
+  bloqueios            BloqueioConselheiro[]
+  criadoEm             DateTime              @default(now()) @map("criado_em")
+  atualizadoEm         DateTime              @updatedAt @map("atualizado_em")
 
   @@map("partidas")
   @@index([jogadorId])
@@ -100,6 +106,22 @@ model OpcaoDesabilitada {
   @@unique([partidaId, membroId, opcaoId])
   @@index([partidaId])
   @@map("opcoes_desabilitadas")
+}
+
+// Bloqueio temporário (10s) aplicado quando o jogador erra 3x o mesmo conselheiro
+model BloqueioConselheiro {
+  id             String    @id @default(uuid())
+  partidaId      String    @map("partida_id")
+  partida        Partida   @relation(fields: [partidaId], references: [id], onDelete: Cascade)
+  membroId       Int       @map("membro_id")
+  bloqueadoAte   DateTime? @map("bloqueado_ate")
+  vezesBloqueado Int       @default(0) @map("vezes_bloqueado")
+  criadoEm       DateTime  @default(now()) @map("criado_em")
+  atualizadoEm   DateTime  @updatedAt @map("atualizado_em")
+
+  @@unique([partidaId, membroId])
+  @@index([partidaId])
+  @@map("bloqueios_conselheiros")
 }
 
 // Log e auditoria de cada tentativa de resposta do jogador

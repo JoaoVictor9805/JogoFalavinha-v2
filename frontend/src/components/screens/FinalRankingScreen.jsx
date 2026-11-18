@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import {
+  AlertCircle,
   AlertTriangle,
   Award,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock,
+  Flame,
   History,
   Info,
   LogOut,
@@ -17,7 +19,7 @@ import {
   Users,
 } from 'lucide-react'
 import { useGame } from '../../context/gameContextInstance'
-import { formatarTempo } from '../../utils/validacaoDesafio'
+import { calcularAssertividade, formatarTempo } from '../../utils/validacaoDesafio'
 
 const ITEMS_PER_PAGE = 10
 
@@ -27,6 +29,7 @@ function FinalRankingScreen() {
     challenges,
     realSeconds,
     penaltySeconds,
+    bonusSeconds,
     totalSeconds,
     totalErrors,
     memberProgress,
@@ -34,6 +37,8 @@ function FinalRankingScreen() {
     rankingSetores,
     playerHistory,
     justFinished,
+    actionError,
+    clearActionError,
     restartGame,
     logout,
     recarregarRankings,
@@ -51,11 +56,15 @@ function FinalRankingScreen() {
   useEffect(() => {
     recarregarRankings?.()
     if (player?.id && carregarHistoricoTentativas) {
-      carregarHistoricoTentativas(player.id)
+      carregarHistoricoTentativas()
     }
   }, [player?.id, carregarHistoricoTentativas, recarregarRankings])
 
   const councilList = Array.isArray(challenges) && challenges.length > 0 ? challenges : []
+  const assertividadeFinal = calcularAssertividade(
+    councilList.length,
+    councilList.length + totalErrors
+  )
   const tentativasList = playerHistory?.tentativas || []
   const melhorPartida = playerHistory?.melhorPartida || null
 
@@ -154,15 +163,40 @@ function FinalRankingScreen() {
             </div>
           </div>
 
+          {/* Alerta amigável caso ocorra erro de rede ao reiniciar partida */}
+          {actionError && (
+            <div className="p-3.5 bg-red-50 border-2 border-red-600 flex items-center justify-between gap-3 text-red-800 text-xs sm:text-sm font-semibold">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{actionError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={clearActionError}
+                className="text-[10px] font-black uppercase px-2 py-0.5 border border-red-400 hover:bg-red-100 cursor-pointer"
+              >
+                OK
+              </button>
+            </div>
+          )}
+
           {/* CASO A: Acabou de finalizar a corrida atual */}
           {justFinished && (
             <>
               {/* Métricas do Tempo Final da Corrida */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-emerald-600 p-4 animate-panel-rise">
-                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">
-                    <Clock className="w-4 h-4" />
-                    <span>Tempo Final Oficial</span>
+                  <div className="flex items-center justify-between gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                    <span className="inline-flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      <span>Tempo Final Oficial</span>
+                    </span>
+                    {totalErrors === 0 && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-600 text-white text-[9px] font-black">
+                        <Flame className="w-3 h-3" />
+                        INVICTO
+                      </span>
+                    )}
                   </div>
                   <div className="font-mono text-3xl sm:text-4xl font-black text-stone-900 mt-1.5">
                     {formatarTempo(totalSeconds)}
@@ -170,8 +204,9 @@ function FinalRankingScreen() {
                   <div className="text-xs text-stone-500 mt-1">
                     {totalSeconds}{' '}
                     {totalSeconds === 1
-                      ? 'segundo total contabilizado'
-                      : 'segundos totais contabilizados'}
+                      ? 'segundo contabilizado'
+                      : 'segundos contabilizados'}{' '}
+                    · Assertividade: <strong className="text-stone-700">{assertividadeFinal}%</strong>
                   </div>
                 </div>
 
@@ -181,13 +216,19 @@ function FinalRankingScreen() {
                 >
                   <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-[#B87D1E]">
                     <Award className="w-4 h-4" />
-                    <span>Tempo de Percurso Real</span>
+                    <span>Tempo Real &amp; Bônus</span>
                   </div>
                   <div className="font-mono text-2xl sm:text-3xl font-extrabold text-stone-900 mt-1.5">
                     {formatarTempo(realSeconds)}
                   </div>
                   <div className="text-xs text-stone-500 mt-1">
-                    Tempo líquido sem contar punições
+                    {bonusSeconds > 0 ? (
+                      <span className="font-bold text-emerald-700">
+                        -{bonusSeconds}s de bônus (combo/invicto) aplicado
+                      </span>
+                    ) : (
+                      'Tempo líquido sem contar ajustes'
+                    )}
                   </div>
                 </div>
 
@@ -204,7 +245,7 @@ function FinalRankingScreen() {
                   </div>
                   <div className="text-xs text-stone-500 mt-1">
                     {totalErrors}{' '}
-                    {totalErrors === 1 ? 'erro cometido' : 'erros cometidos'} (+5s por erro)
+                    {totalErrors === 1 ? 'erro cometido' : 'erros cometidos'}
                   </div>
                 </div>
               </div>
@@ -387,10 +428,8 @@ function FinalRankingScreen() {
                   ) : (
                     paginatedGeral.map((item, idx) => {
                       const errCount = item.totalErrors || 0
-                      const isCurrentUser = Boolean(
-                        (player?.id && item.jogadorId === player.id) ||
-                        (player?.email && item.email && item.email.toLowerCase() === player.email.toLowerCase())
-                      )
+                      const bonusSec = item.bonusSeconds || 0
+                      const isCurrentUser = Boolean(player?.id && item.jogadorId === player.id)
 
                       return (
                         <tr
@@ -405,7 +444,16 @@ function FinalRankingScreen() {
                             {item.posicao || (currentPageGeral - 1) * ITEMS_PER_PAGE + idx + 1}º
                           </td>
                           <td className="py-3.5 px-4 font-bold text-stone-900">
-                            {item.nome}
+                            <span>{item.nome}</span>
+                            {item.invicto && (
+                              <span
+                                title="Concluiu os 7 desafios sem nenhum erro"
+                                className="ml-2 inline-flex items-center gap-1 text-[10px] font-black uppercase bg-emerald-600 text-white px-1.5 py-0.5"
+                              >
+                                <Flame className="w-2.5 h-2.5" />
+                                Invicto
+                              </span>
+                            )}
                             {isCurrentUser && (
                               <span className="ml-2 text-[10px] font-black uppercase bg-[#D99B38] text-stone-950 px-1.5 py-0.5">
                                 Você
@@ -416,9 +464,14 @@ function FinalRankingScreen() {
                             {item.setor}
                           </td>
                           <td className="py-3.5 px-4 text-stone-500">{item.unidade}</td>
-                          <td className="py-3.5 px-4 font-mono text-xs font-bold text-red-600">
-                            +{item.penaltySeconds || 0}s ({errCount}{' '}
-                            {errCount === 1 ? 'erro' : 'erros'})
+                          <td className="py-3.5 px-4 font-mono text-xs font-bold">
+                            <span className="text-red-600">
+                              +{item.penaltySeconds || 0}s ({errCount}{' '}
+                              {errCount === 1 ? 'erro' : 'erros'})
+                            </span>
+                            {bonusSec > 0 && (
+                              <span className="ml-2 text-emerald-700">-{bonusSec}s bônus</span>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 font-mono font-black text-emerald-700 text-right">
                             {formatarTempo(item.totalSeconds)}
@@ -655,19 +708,33 @@ function FinalRankingScreen() {
                       <td className="py-3.5 px-4 font-mono text-stone-700">
                         {formatarTempo(item.segundosReais)}
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-xs font-bold text-red-600">
-                        +{item.segundosPenalidade || 0}s ({item.totalErros || 0}{' '}
-                        {item.totalErros === 1 ? 'erro' : 'erros'})
+                      <td className="py-3.5 px-4 font-mono text-xs font-bold">
+                        <span className="text-red-600">
+                          +{item.segundosPenalidade || 0}s ({item.totalErros || 0}{' '}
+                          {item.totalErros === 1 ? 'erro' : 'erros'})
+                        </span>
+                        {(item.segundosBonus || 0) > 0 && (
+                          <span className="ml-2 text-emerald-700">-{item.segundosBonus}s bônus</span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4">
-                        {item.isMelhorTempo ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase bg-[#D99B38] text-stone-950 px-2 py-0.5 border border-stone-900 shadow-[1px_1px_0px_#1C1917]">
-                            <Star className="w-3 h-3 fill-stone-950" />
-                            Recorde Pessoal
-                          </span>
-                        ) : (
-                          <span className="text-xs text-stone-400 font-medium">—</span>
-                        )}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {item.isMelhorTempo && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase bg-[#D99B38] text-stone-950 px-2 py-0.5 border border-stone-900 shadow-[1px_1px_0px_#1C1917]">
+                              <Star className="w-3 h-3 fill-stone-950" />
+                              Recorde Pessoal
+                            </span>
+                          )}
+                          {item.invicto && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase bg-emerald-600 text-white px-2 py-0.5 border border-stone-900">
+                              <Flame className="w-3 h-3" />
+                              Invicto
+                            </span>
+                          )}
+                          {!item.isMelhorTempo && !item.invicto && (
+                            <span className="text-xs text-stone-400 font-medium">—</span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-4 font-mono font-black text-emerald-700 text-right">
                         {formatarTempo(item.segundosTotais)}

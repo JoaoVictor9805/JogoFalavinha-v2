@@ -1,4 +1,7 @@
+import bcrypt from 'bcryptjs'
 import prisma from '../src/db.js'
+
+const MOCK_DEFAULT_PASSWORD = 'Falavinha@2026'
 
 const MOCK_PLAYERS = [
   {
@@ -112,7 +115,13 @@ const MOCK_PLAYERS = [
 ]
 
 async function run() {
+  if (process.env.NODE_ENV === 'production') {
+    console.error('❌ seedMockPlayers.js não pode ser executado em ambiente de produção.')
+    process.exit(1)
+  }
+
   console.log('Inserindo 12 jogadores simulados para teste de paginação...')
+  const senhaHash = await bcrypt.hash(MOCK_DEFAULT_PASSWORD, 10)
 
   // Limpa apenas as contas temporárias joao.oliveira2..6 criadas em testes rápidos, mantendo a conta oficial joao.oliveira@falavinha.com.br
   await prisma.jogador.deleteMany({
@@ -136,13 +145,14 @@ async function run() {
         nome: item.nome,
         unidade: item.unidade,
         setor: item.setor,
+        senha: senhaHash,
       },
       create: {
         nome: item.nome,
         email: item.email,
         unidade: item.unidade,
         setor: item.setor,
-        senha: '123',
+        senha: senhaHash,
       },
     })
 

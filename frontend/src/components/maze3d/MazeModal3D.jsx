@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, useState } from 'react'
-import { Check, Compass, Loader2, Play, Trophy, X } from 'lucide-react'
+import { AlertTriangle, Check, Compass, Loader2, Play, Trophy, X } from 'lucide-react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
@@ -48,7 +48,13 @@ function detectWebGL() {
   }
 }
 
-function MazeViewport({ initialStep, targetStep, animateIntro, gender = 'masculino' }) {
+function MazeViewport({
+  initialStep,
+  targetStep,
+  animateIntro,
+  triggerError = false,
+  gender = 'masculino',
+}) {
   const containerRef = useRef(null)
   const [webglUnavailable, setWebglUnavailable] = useState(() => !detectWebGL())
   const [isSceneReady, setIsSceneReady] = useState(false)
@@ -56,11 +62,13 @@ function MazeViewport({ initialStep, targetStep, animateIntro, gender = 'masculi
   const initialStepRef = useRef(initialStep)
   const targetStepRef = useRef(targetStep)
   const animateIntroRef = useRef(animateIntro)
+  const triggerErrorRef = useRef(triggerError)
   const genderRef = useRef(gender)
   const worldRef = useRef(null)
 
   const stepAudioRef = useRef(null)
   const chimeAudioRef = useRef(null)
+  const phoneAudioRef = useRef(null)
   const prevTargetRef = useRef(targetStep)
 
   useEffect(() => {
@@ -72,9 +80,14 @@ function MazeViewport({ initialStep, targetStep, animateIntro, gender = 'masculi
     chime.volume = 0.45
     chimeAudioRef.current = chime
 
+    const phone = new Audio('/sounds/desk-phone-ring.mp3')
+    phone.volume = 0.35
+    phoneAudioRef.current = phone
+
     return () => {
       stepAudioRef.current = null
       chimeAudioRef.current = null
+      phoneAudioRef.current = null
     }
   }, [])
 
@@ -138,6 +151,14 @@ function MazeViewport({ initialStep, targetStep, animateIntro, gender = 'masculi
       roomEnv.dispose()
 
       const world = createWorldState()
+      if (triggerErrorRef.current) {
+        world.errorActive = true
+        world.errorAt = performance.now()
+        if (phoneAudioRef.current) {
+          phoneAudioRef.current.currentTime = 0
+          phoneAudioRef.current.play().catch(() => {})
+        }
+      }
       worldRef.current = world
 
       const skipIntroAnim = !animateIntroRef.current
@@ -371,11 +392,12 @@ function MazeViewport({ initialStep, targetStep, animateIntro, gender = 'masculi
  * Modos:
  *  - 'intro': mostrado após a explicação do CEO; exige confirmação em "OK · Iniciar Desafio"
  *  - 'progress': exibido automaticamente quando o jogador acerta uma questão, animando o avanço
+ *  - 'error': exibido na reprovação após 3 erros, disparando o telefone tocando na sala do cliente
  *  - 'manual': aberto sob demanda pelo botão "Visualizar Mapa", fechado pelo botão "X"
  */
 function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
   const { player } = useGame()
-  const { mode, fromStep, toStep, memberName, isFinal } = modalState
+  const { mode, fromStep, toStep, memberName, isFinal, lockSeconds = 10 } = modalState
   const [displayedStep, setDisplayedStep] = useState(fromStep)
   const avatarGender = player?.genero || 'masculino'
 
@@ -400,32 +422,39 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
 
   const isIntro = mode === 'intro'
   const isProgress = mode === 'progress'
+  const isError = mode === 'error'
 
   const tagTitle = isIntro
     ? 'Percurso 3D · Apresentação'
-    : isFinal
-      ? 'Aprovação Unânime · 7/7'
-      : isProgress
-        ? `Avanço no Labirinto · ${toStep}/${MAZE_STEPS}`
-        : `Mapa do Labirinto · ${toStep}/${MAZE_STEPS}`
+    : isError
+      ? `Reprovação · Bloqueio de ${lockSeconds}s`
+      : isFinal
+        ? 'Aprovação Unânime · 7/7'
+        : isProgress
+          ? `Avanço no Labirinto · ${toStep}/${MAZE_STEPS}`
+          : `Mapa do Labirinto · ${toStep}/${MAZE_STEPS}`
 
   const headline = isIntro
     ? 'Mapa Corporativo até a Sala do Cliente'
-    : isFinal
-      ? 'O Colaborador Chegou à Porta do Cliente!'
-      : isProgress
-        ? `${memberName || 'Conselheiro'} aprovou sua resposta!`
-        : 'Visão Geral do Percurso 3D'
+    : isError
+      ? `${memberName || 'Conselheiro'} reprovou sua tentativa!`
+      : isFinal
+        ? 'O Colaborador Chegou à Porta do Cliente!'
+        : isProgress
+          ? `${memberName || 'Conselheiro'} aprovou sua resposta!`
+          : 'Visão Geral do Percurso 3D'
 
   const description = isIntro
     ? 'A cada conselheiro aprovado, o colaborador avança uma etapa por esses corredores até alcançar a sala do cliente.'
-    : isFinal
-      ? 'Todos os 7 conselheiros foram convencidos e o colaborador cruzou a porta final.'
-      : isProgress
-        ? `O colaborador avançou para a etapa ${toStep} de ${MAZE_STEPS}. Faltam ${MAZE_STEPS - toStep} ${
-            MAZE_STEPS - toStep === 1 ? 'conselheiro' : 'conselheiros'
-          }.`
-        : 'Arraste o mouse sobre a maquete para girar o ângulo de visão.'
+    : isError
+      ? `Você atingiu 3 erros nesta cadeira (+10s de penalidade). O conselheiro foi bloqueado por ${lockSeconds}s e as alternativas serão reembaralhadas — desafie outro membro enquanto aguarda!`
+      : isFinal
+        ? 'Todos os 7 conselheiros foram convencidos e o colaborador cruzou a porta final.'
+        : isProgress
+          ? `O colaborador avançou para a etapa ${toStep} de ${MAZE_STEPS}. Faltam ${MAZE_STEPS - toStep} ${
+              MAZE_STEPS - toStep === 1 ? 'conselheiro' : 'conselheiros'
+            }.`
+          : 'Arraste o mouse sobre a maquete para girar o ângulo de visão.'
 
   return (
     <div
@@ -434,7 +463,7 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
       aria-modal="true"
       aria-label={headline}
       onClick={(e) => {
-        if (e.target === e.currentTarget && mode === 'manual') {
+        if (e.target === e.currentTarget && (mode === 'manual' || mode === 'error')) {
           onClose()
         }
       }}
@@ -444,10 +473,14 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
         <div className="flex items-end justify-between gap-4">
           <div
             className={`inline-flex items-center gap-2 px-4 py-1 text-xs font-black uppercase tracking-[0.18em] border-2 border-b-0 border-stone-900 ml-3 relative z-10 ${
-              isFinal ? 'bg-emerald-600 text-white' : 'bg-[#D99B38] text-stone-950'
+              isError
+                ? 'bg-red-600 text-white'
+                : isFinal
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-[#D99B38] text-stone-950'
             }`}
           >
-            <Compass className="w-3.5 h-3.5" />
+            {isError ? <AlertTriangle className="w-3.5 h-3.5" /> : <Compass className="w-3.5 h-3.5" />}
             <span>{tagTitle}</span>
           </div>
 
@@ -486,10 +519,11 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
           <div className="relative w-full h-[290px] sm:h-[380px] bg-[#EAE1CF] border-b-2 border-stone-900 overflow-hidden">
             <WebGLBoundary step={displayedStep}>
               <MazeViewport
-                key={avatarGender}
+                key={`${avatarGender}-${mode}`}
                 initialStep={fromStep}
                 targetStep={displayedStep}
                 animateIntro={isIntro}
+                triggerError={isError}
                 gender={avatarGender}
               />
             </WebGLBoundary>
@@ -509,6 +543,15 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
               >
                 <Play className="w-4 h-4 fill-current" />
                 <span>OK · Iniciar Desafio</span>
+              </button>
+            ) : isError ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white border-2 border-stone-900 font-black text-xs uppercase tracking-[0.18em] shadow-[3px_3px_0px_#1C1917] hover:-translate-y-0.5 active:scale-95 transition-all cursor-pointer"
+              >
+                <Check className="w-4 h-4 stroke-[2.75]" />
+                <span>OK · Voltar ao Tribunal</span>
               </button>
             ) : isFinal ? (
               <button

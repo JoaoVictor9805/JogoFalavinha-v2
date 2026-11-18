@@ -9,11 +9,21 @@ import { GameProvider } from './context/GameContext'
 import { useGame } from './context/gameContextInstance'
 
 function GameScreenRouter() {
-  const { screen, screenFadePhase } = useGame()
+  const { screen, isRestoringSession, screenFadePhase } = useGame()
 
   useEffect(() => {
     window.scrollTo(0, 0)
   }, [screen])
+
+  if (isRestoringSession) {
+    return (
+      <div className="min-h-screen w-full bg-[#F5F0E6] text-stone-900 flex items-center justify-center p-6">
+        <div className="bg-[#FDFBF7] border-2 border-stone-900 px-6 py-4 shadow-[6px_6px_0px_#1C1917] text-xs font-black uppercase tracking-[0.2em] text-stone-700">
+          Carregando Conselho Next...
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="relative min-h-screen w-full bg-[#F5F0E6] text-stone-900">

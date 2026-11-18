@@ -32,6 +32,8 @@ services:
       - NODE_ENV=development
       - PORT=3001
       - FRONTEND_ORIGIN=http://localhost:5174
+      - JWT_SECRET=dev-falavinha-next-jwt-secret-change-in-prod
+      - JWT_EXPIRES_IN=7d
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_HOST=postgres
@@ -41,6 +43,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
 
   frontend:
     build:
@@ -58,7 +66,8 @@ services:
       - CHOKIDAR_USEPOLLING=true
       - API_PROXY_TARGET=http://backend:3001
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   frontend_node_modules:
