@@ -1,5 +1,5 @@
 import { Component, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, Compass, Loader2, Play, Trophy, X } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Check, Compass, Loader2, Play, Trophy, X } from 'lucide-react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
@@ -396,7 +396,7 @@ function MazeViewport({
  *  - 'manual': aberto sob demanda pelo botão "Visualizar Mapa", fechado pelo botão "X"
  */
 function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
-  const { player } = useGame()
+  const { player, isLocked, actionError, clearActionError } = useGame()
   const { mode, fromStep, toStep, memberName, isFinal, lockSeconds = 10 } = modalState
   const [displayedStep, setDisplayedStep] = useState(fromStep)
   const avatarGender = player?.genero || 'masculino'
@@ -529,6 +529,23 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
             </WebGLBoundary>
           </div>
 
+          {/* Alerta de erro visível dentro do modal (ex.: falha ao iniciar cronômetro no servidor) */}
+          {isIntro && actionError && (
+            <div className="px-5 py-3 bg-red-50 border-b-2 border-red-600 flex items-center justify-between gap-3 text-red-800 text-xs font-semibold">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>{actionError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={clearActionError}
+                className="text-[10px] font-black uppercase px-2 py-0.5 border border-red-400 hover:bg-red-100 cursor-pointer"
+              >
+                OK
+              </button>
+            </div>
+          )}
+
           {/* Rodapé com ação */}
           <div className="px-5 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#FDFBF7]">
             <span className="text-[11px] font-mono text-stone-500">
@@ -538,11 +555,21 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
             {isIntro ? (
               <button
                 type="button"
+                disabled={isLocked}
                 onClick={onConfirmIntro}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3 bg-[#D99B38] hover:bg-[#c58927] text-stone-950 border-2 border-stone-900 font-black text-xs uppercase tracking-[0.18em] shadow-[4px_4px_0px_#1C1917] hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_#1C1917] active:scale-95 transition-all cursor-pointer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3 bg-[#D99B38] hover:bg-[#c58927] text-stone-950 border-2 border-stone-900 font-black text-xs uppercase tracking-[0.18em] shadow-[4px_4px_0px_#1C1917] hover:-translate-y-0.5 hover:shadow-[5px_5px_0px_#1C1917] active:scale-95 disabled:opacity-60 disabled:pointer-events-none transition-all cursor-pointer"
               >
-                <Play className="w-4 h-4 fill-current" />
-                <span>OK · Iniciar Desafio</span>
+                {isLocked ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Iniciando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-current" />
+                    <span>OK · Iniciar Desafio</span>
+                  </>
+                )}
               </button>
             ) : isError ? (
               <button

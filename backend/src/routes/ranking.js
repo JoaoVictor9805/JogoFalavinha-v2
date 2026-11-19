@@ -1,74 +1,102 @@
 import { Router } from 'express'
 import prisma from '../db.js'
+import { requireAuth } from '../middleware/requireAuth.js'
 import { formatarDataBrasilia } from '../utils/dateFormatter.js'
 
 const router = Router()
 
+// Exige sessão autenticada para consultar rankings internos de colaboradores
+router.use(requireAuth)
+
 // Quórum mínimo oficial para pontuar no ranking por equipes
 const MIN_QUORUM = 3
 
+// Cache curto em memória para reduzir carga no banco em horários de pico
+const RANKING_CACHE_TTL_MS = 5000
+let rankingCache = {
+  expiresAt: 0,
+  data: null,
+}
+
+export function invalidateRankingCache() {
+  rankingCache = {
+    expiresAt: 0,
+    data: null,
+  }
+}
+
 /**
- * Função auxiliar que busca as partidas concluídas e filtra apenas
- * o MELHOR TEMPO (Personal Record) de cada jogador único.
- *
- * Se o jogador jogar várias vezes:
- * - Se fizer um tempo menor (melhor), seu recorde é atualizado no ranking.
- * - Se fizer um tempo maior (pior), o recorde anterior é preservado.
- * - Cada pessoa conta apenas UMA VEZ no ranking e na contagem da equipe.
+ * Busca diretamente no PostgreSQL via `DISTINCT ON (jogador_id)` apenas
+ * o MELHOR TEMPO (Personal Record) de cada colaborador único, já ordenado
+ * pelo critério oficial (segundosTotais -> segundosReais -> totalErros -> finalizadoEm).
  */
 async function obterMelhoresPartidasPorJogador() {
-  const partidasConcluidas = await prisma.partida.findMany({
-    where: { status: 'CONCLUIDA' },
-    orderBy: [
-      { segundosTotais: 'asc' },
-      { totalErros: 'asc' },
-      { finalizadoEm: 'asc' },
-    ],
-    include: {
-      jogador: {
-        select: {
-          id: true,
-          nome: true,
-          unidade: true,
-          setor: true,
-        },
-      },
-    },
-  })
-
-  // Como a consulta já vem ordenada pelo menor tempo, o primeiro registro de cada jogador é o seu melhor
-  const melhoresPartidas = new Map()
-  for (const p of partidasConcluidas) {
-    if (!melhoresPartidas.has(p.jogadorId)) {
-      melhoresPartidas.set(p.jogadorId, p)
-    }
+  const now = Date.now()
+  if (rankingCache.data && rankingCache.expiresAt > now) {
+    return rankingCache.data
   }
 
-  return Array.from(melhoresPartidas.values())
+  const melhoresPartidas = await prisma.$queryRaw`
+    SELECT * FROM (
+      SELECT DISTINCT ON (p."jogador_id")
+        p."jogador_id" AS "jogadorId",
+        p."segundos_reais" AS "segundosReais",
+        p."segundos_penalidade" AS "segundosPenalidade",
+        p."segundos_bonus" AS "segundosBonus",
+        p."segundos_totais" AS "segundosTotais",
+        p."total_erros" AS "totalErros",
+        p."total_combos" AS "totalCombos",
+        p."finalizado_em" AS "finalizadoEm",
+        j."nome" AS "nome",
+        j."unidade" AS "unidade",
+        j."setor" AS "setor"
+      FROM "partidas" p
+      INNER JOIN "jogadores" j ON j."id" = p."jogador_id"
+      WHERE p."status" = 'CONCLUIDA'
+      ORDER BY
+        p."jogador_id",
+        p."segundos_totais" ASC,
+        p."segundos_reais" ASC,
+        p."total_erros" ASC,
+        p."finalizado_em" ASC
+    ) AS melhores
+    ORDER BY
+      melhores."segundosTotais" ASC,
+      melhores."segundosReais" ASC,
+      melhores."totalErros" ASC,
+      melhores."finalizadoEm" ASC
+  `
+
+  rankingCache = {
+    expiresAt: now + RANKING_CACHE_TTL_MS,
+    data: melhoresPartidas,
+  }
+
+  return melhoresPartidas
 }
 
 /**
  * GET /api/ranking
  * Retorna o Ranking Geral individual considerando apenas o MELHOR tempo de cada colaborador.
+ * Não expõe e-mail nem UUIDs (`jogadorId` / `partidaId`) de terceiros.
  */
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
     const melhoresPartidas = await obterMelhoresPartidasPorJogador()
 
     const rankingGeral = melhoresPartidas.map((p, index) => ({
       posicao: index + 1,
-      id: p.id,
-      jogadorId: p.jogadorId,
-      nome: p.jogador.nome,
-      unidade: p.jogador.unidade,
-      setor: p.jogador.setor,
-      realSeconds: p.segundosReais,
-      penaltySeconds: p.segundosPenalidade,
-      bonusSeconds: p.segundosBonus || 0,
-      totalCombos: p.totalCombos || 0,
-      invicto: p.totalErros === 0,
-      totalSeconds: p.segundosTotais,
-      totalErrors: p.totalErros,
+      isCurrentUser: p.jogadorId === req.jogadorId,
+      nome: p.nome,
+      unidade: p.unidade,
+      setor: p.setor,
+      realSeconds: Number(p.segundosReais) || 0,
+      penaltySeconds: Number(p.segundosPenalidade) || 0,
+      bonusSeconds: Number(p.segundosBonus) || 0,
+      totalCombos: Number(p.totalCombos) || 0,
+      invicto: Number(p.totalErros) === 0,
+      totalSeconds: Number(p.segundosTotais) || 0,
+      totalErrors: Number(p.totalErros) || 0,
       completedAt: formatarDataBrasilia(p.finalizadoEm),
     }))
 
@@ -90,10 +118,12 @@ router.get('/setores', async (_req, res) => {
   try {
     const melhoresPartidas = await obterMelhoresPartidasPorJogador()
 
-    // Agrupa as métricas por setor usando apenas os colaboradores únicos
     const agrupado = {}
     for (const p of melhoresPartidas) {
-      const setor = p.jogador.setor || 'Geral'
+      const setor = p.setor || 'Geral'
+      const totalSeg = Number(p.segundosTotais) || 0
+      const erros = Number(p.totalErros) || 0
+
       if (!agrupado[setor]) {
         agrupado[setor] = {
           setor,
@@ -105,10 +135,10 @@ router.get('/setores', async (_req, res) => {
       }
 
       agrupado[setor].participantesConcluidos += 1
-      agrupado[setor].somaSegundosTotais += p.segundosTotais
-      agrupado[setor].somaErros += p.totalErros
-      if (p.segundosTotais < agrupado[setor].melhorTempoSegundos) {
-        agrupado[setor].melhorTempoSegundos = p.segundosTotais
+      agrupado[setor].somaSegundosTotais += totalSeg
+      agrupado[setor].somaErros += erros
+      if (totalSeg < agrupado[setor].melhorTempoSegundos) {
+        agrupado[setor].melhorTempoSegundos = totalSeg
       }
     }
 
@@ -126,8 +156,6 @@ router.get('/setores', async (_req, res) => {
       }
     })
 
-    // 1. Setores Qualificados (com Quórum Mínimo de 3 pessoas)
-    // Ordenação: 1º Média de Tempo ASC | 2º Maior nº de Participantes DESC (Desempate) | 3º Menor nº de Erros ASC
     const qualificados = setoresMapeados
       .filter((s) => s.qualificado)
       .sort((a, b) => {
@@ -147,7 +175,6 @@ router.get('/setores', async (_req, res) => {
         ...item,
       }))
 
-    // 2. Setores em Formação (menos de 3 concluintes)
     const emFormacao = setoresMapeados
       .filter((s) => !s.qualificado)
       .sort((a, b) => {

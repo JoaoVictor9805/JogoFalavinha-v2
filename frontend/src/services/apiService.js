@@ -11,6 +11,7 @@ async function request(endpoint, options = {}) {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      'X-Requested-With': 'fetch',
       ...options.headers,
     },
   }
@@ -103,10 +104,10 @@ export const apiService = {
     })
   },
 
-  async sincronizarTempo(partidaId, segundosReais) {
+  async sincronizarTempo(partidaId) {
     return request(`/partidas/${partidaId}/sincronizar-tempo`, {
       method: 'POST',
-      body: JSON.stringify({ segundosReais }),
+      body: JSON.stringify({}),
     })
   },
 

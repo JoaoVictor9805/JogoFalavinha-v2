@@ -7,12 +7,23 @@ import {
   SETORES_OFICIAIS,
   UNIDADES_OFICIAIS,
   isValidCorporateEmail,
+  isValidUuid,
 } from '../data/constantes.js'
 import prisma from '../db.js'
 import { requireAuth } from '../middleware/requireAuth.js'
-import { clearSessionCookie, setSessionCookie } from '../utils/jwt.js'
+import { calcularSegundosTotais, calcularTempoServidor } from '../utils/gameRules.js'
+import {
+  SESSION_COOKIE_NAME,
+  clearSessionCookie,
+  setSessionCookie,
+  verifySessionToken,
+} from '../utils/jwt.js'
+import { logSecurityEvent } from '../utils/securityLogger.js'
 
 const router = Router()
+
+// Hash dummy gerado uma única vez no boot para equalizar o tempo de resposta quando o e-mail não existe
+const DUMMY_BCRYPT_HASH = bcrypt.hashSync('falavinha-timing-guard-placeholder', 10)
 
 const JOGADOR_SAFE_SELECT = {
   id: true,
@@ -34,20 +45,31 @@ async function buscarPartidaAtiva(jogadorId) {
     include: {
       opcoesDesabilitadas: true,
       bloqueios: true,
+      tentativas: {
+        where: { acertou: false },
+        select: {
+          desafioId: true,
+          penalidadeAplicada: true,
+        },
+      },
     },
   })
 
-  // Ao retomar uma partida que já teve cronômetro iniciado, atualiza o marco de sincronização
-  // para que o tempo em pausa (aba fechada) não dispare o anti-cheat na próxima resposta.
-  if (partida?.cronometroIniciadoEm) {
-    return prisma.partida.update({
-      where: { id: partida.id },
-      data: { ultimoSyncEm: new Date() },
-      include: {
-        opcoesDesabilitadas: true,
-        bloqueios: true,
-      },
+  if (!partida) return null
+
+  // Nunca reseta ultimoSyncEm ao retomar (anti-cheat): calcula o tempo contínuo em tempo real no servidor
+  if (partida.cronometroIniciadoEm) {
+    const segundosReais = calcularTempoServidor({ partida, now: new Date() })
+    const segundosTotais = calcularSegundosTotais({
+      segundosReais,
+      segundosPenalidade: partida.segundosPenalidade,
+      segundosBonus: partida.segundosBonus,
     })
+    return {
+      ...partida,
+      segundosReais,
+      segundosTotais,
+    }
   }
 
   return partida
@@ -76,11 +98,17 @@ router.post('/cadastrar', async (req, res) => {
 
     if (
       typeof senha !== 'string' ||
-      senha.trim().length < MIN_PASSWORD_LENGTH ||
-      senha.length > MAX_PASSWORD_LENGTH
+      senha.length < MIN_PASSWORD_LENGTH ||
+      senha.trim().length < MIN_PASSWORD_LENGTH
     ) {
       return res.status(400).json({
         erro: `A senha deve ter no mínimo ${MIN_PASSWORD_LENGTH} caracteres.`,
+      })
+    }
+
+    if (Buffer.byteLength(senha, 'utf8') > MAX_PASSWORD_LENGTH) {
+      return res.status(400).json({
+        erro: `A senha deve ter no máximo ${MAX_PASSWORD_LENGTH} bytes.`,
       })
     }
 
@@ -133,16 +161,31 @@ router.post('/cadastrar', async (req, res) => {
         genero: generoLimpo,
         senha: senhaHash,
       },
-      select: JOGADOR_SAFE_SELECT,
+      select: {
+        ...JOGADOR_SAFE_SELECT,
+        tokenVersion: true,
+      },
     })
 
-    setSessionCookie(res, novoJogador.id)
+    const { tokenVersion, ...jogadorPublico } = novoJogador
+    setSessionCookie(res, jogadorPublico.id, tokenVersion)
+
+    logSecurityEvent('REGISTER_SUCCESS', {
+      jogadorId: jogadorPublico.id,
+      email: jogadorPublico.email,
+      ip: req.ip,
+    })
 
     return res.status(201).json({
       mensagem: 'Cadastro realizado com sucesso!',
-      jogador: novoJogador,
+      jogador: jogadorPublico,
     })
   } catch (error) {
+    if (error?.code === 'P2002') {
+      return res.status(409).json({
+        erro: 'Este e-mail corporativo já está cadastrado. Faça login para continuar.',
+      })
+    }
     console.error('[auth/cadastrar] Erro:', error)
     return res.status(500).json({ erro: 'Erro interno ao realizar cadastro.' })
   }
@@ -162,7 +205,7 @@ router.post('/login', async (req, res) => {
       })
     }
 
-    if (typeof senha !== 'string' || !senha.length) {
+    if (typeof senha !== 'string' || !senha.length || Buffer.byteLength(senha, 'utf8') > MAX_PASSWORD_LENGTH) {
       return res.status(400).json({ erro: 'Informe sua senha para entrar.' })
     }
 
@@ -173,6 +216,12 @@ router.post('/login', async (req, res) => {
     })
 
     if (!jogador) {
+      await bcrypt.compare(senha, DUMMY_BCRYPT_HASH)
+      logSecurityEvent('LOGIN_FAILED', {
+        email: emailNormalizado,
+        reason: 'user_not_found',
+        ip: req.ip,
+      })
       return res.status(401).json({
         erro: 'E-mail ou senha inválidos.',
       })
@@ -185,13 +234,25 @@ router.post('/login', async (req, res) => {
       (await bcrypt.compare(senha, jogador.senha))
 
     if (!senhaValida) {
+      logSecurityEvent('LOGIN_FAILED', {
+        jogadorId: jogador.id,
+        email: emailNormalizado,
+        reason: 'invalid_password',
+        ip: req.ip,
+      })
       return res.status(401).json({
         erro: 'E-mail ou senha inválidos.',
       })
     }
 
-    setSessionCookie(res, jogador.id)
+    setSessionCookie(res, jogador.id, jogador.tokenVersion)
     const partidaAtiva = await buscarPartidaAtiva(jogador.id)
+
+    logSecurityEvent('LOGIN_SUCCESS', {
+      jogadorId: jogador.id,
+      email: jogador.email,
+      ip: req.ip,
+    })
 
     return res.json({
       mensagem: 'Login realizado com sucesso!',
@@ -241,9 +302,32 @@ router.get('/me', requireAuth, async (req, res) => {
 
 /**
  * POST /api/auth/logout
- * Encerra a sessão limpando o cookie httpOnly.
+ * Encerra a sessão revogando todos os JWTs anteriores via `tokenVersion` e limpando o cookie httpOnly.
  */
-router.post('/logout', (_req, res) => {
+router.post('/logout', async (req, res) => {
+  try {
+    const token = req.cookies?.[SESSION_COOKIE_NAME]
+    if (token) {
+      try {
+        const decoded = verifySessionToken(token)
+        if (isValidUuid(decoded?.sub)) {
+          await prisma.jogador.updateMany({
+            where: { id: decoded.sub },
+            data: { tokenVersion: { increment: 1 } },
+          })
+          logSecurityEvent('LOGOUT_REVOKED', {
+            jogadorId: decoded.sub,
+            ip: req.ip,
+          })
+        }
+      } catch {
+        // Token já expirado ou inválido: apenas limpa o cookie
+      }
+    }
+  } catch (error) {
+    console.error('[auth/logout] Erro ao revogar tokenVersion:', error)
+  }
+
   clearSessionCookie(res)
   return res.json({ mensagem: 'Sessão encerrada com sucesso.' })
 })

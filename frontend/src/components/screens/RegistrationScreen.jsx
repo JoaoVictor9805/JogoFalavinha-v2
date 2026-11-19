@@ -5,6 +5,7 @@ import { DEPARTMENTS_LIST, UNITS_LIST } from '../../data/conselhoNextData'
 
 const CORPORATE_EMAIL_REGEX = /^[a-z0-9._%+-]+@falavinha\.com\.br$/i
 const MIN_PASSWORD_LENGTH = 8
+const MAX_PASSWORD_LENGTH = 72
 
 function RegistrationScreen() {
   const {
@@ -25,6 +26,7 @@ function RegistrationScreen() {
     nome: player?.nome || '',
     email: player?.email || '',
     senha: '',
+    confirmarSenha: '',
     genero: player?.genero || 'masculino',
     unidade: player?.unidade || UNITS_LIST[0],
     setor: player?.setor || DEPARTMENTS_LIST[0],
@@ -76,6 +78,16 @@ function RegistrationScreen() {
 
     if (registerForm.senha.trim().length < MIN_PASSWORD_LENGTH) {
       setLocalError(`A senha deve ter no mínimo ${MIN_PASSWORD_LENGTH} caracteres.`)
+      return
+    }
+
+    if (new TextEncoder().encode(registerForm.senha).length > MAX_PASSWORD_LENGTH) {
+      setLocalError(`A senha deve ter no máximo ${MAX_PASSWORD_LENGTH} bytes.`)
+      return
+    }
+
+    if (registerForm.senha !== registerForm.confirmarSenha) {
+      setLocalError('As senhas digitadas não conferem.')
       return
     }
 
@@ -233,8 +245,36 @@ function RegistrationScreen() {
                   type="password"
                   required
                   minLength={MIN_PASSWORD_LENGTH}
+                  maxLength={MAX_PASSWORD_LENGTH}
+                  autoComplete="new-password"
                   placeholder="Mínimo 8 caracteres"
                   value={registerForm.senha}
+                  onChange={handleRegisterChange}
+                  disabled={isLocked || isSubmitting}
+                  className="w-full pl-10 pr-4 py-3 rounded-none bg-white border-2 border-stone-300 text-stone-900 placeholder-stone-400 text-sm font-semibold focus:outline-none focus:border-[#D99B38] transition-colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="confirmarSenha"
+                className="block text-[11px] font-black uppercase tracking-[0.16em] text-stone-800 mb-1.5"
+              >
+                Confirmar Senha *
+              </label>
+              <div className="relative group">
+                <Key className="w-4 h-4 text-stone-400 group-focus-within:text-[#B87D1E] absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors" />
+                <input
+                  id="confirmarSenha"
+                  name="confirmarSenha"
+                  type="password"
+                  required
+                  minLength={MIN_PASSWORD_LENGTH}
+                  maxLength={MAX_PASSWORD_LENGTH}
+                  autoComplete="new-password"
+                  placeholder="Digite a mesma senha novamente"
+                  value={registerForm.confirmarSenha}
                   onChange={handleRegisterChange}
                   disabled={isLocked || isSubmitting}
                   className="w-full pl-10 pr-4 py-3 rounded-none bg-white border-2 border-stone-300 text-stone-900 placeholder-stone-400 text-sm font-semibold focus:outline-none focus:border-[#D99B38] transition-colors"
@@ -392,6 +432,7 @@ function RegistrationScreen() {
                   name="senha"
                   type="password"
                   required
+                  maxLength={MAX_PASSWORD_LENGTH}
                   placeholder="Digite sua senha cadastrada"
                   value={loginForm.senha}
                   onChange={handleLoginChange}

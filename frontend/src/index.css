@@ -216,7 +216,7 @@
 }
 
 .animate-reading-bar {
-  animation: progressShrink 2.5s linear forwards;
+  animation: progressShrink 3.5s linear forwards;
 }
 
 .animate-arrival-fill {

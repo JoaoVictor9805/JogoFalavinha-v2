@@ -8,21 +8,33 @@ export const UNIDADES_OFICIAIS = [
 ]
 
 export const SETORES_OFICIAIS = [
-  'Tributário',
+  'Administrativo',
+  'Altavia',
+  'CIGAM',
+  'Comercial',
+  'Condomínios',
+  'Consulta de negócios',
   'Contábil',
+  'DP',
+  'Diretoria',
   'Financeiro',
-  'Recursos Humanos',
-  'TI / Inovação',
-  'Comercial / Vendas',
-  'Operações / Suporte',
-  'Diretoria / Gestão',
+  'Fiscal',
+  'Gente & Gestão',
+  'Hubnext',
+  'Inovação',
+  'Inteligência de negócios',
+  'Marketing',
+  'Societário',
+  'TI',
+  'Tributário',
 ]
 
 export const GENEROS_VALIDOS = ['masculino', 'feminino']
 
 export const ALLOWED_EMAIL_DOMAIN = '@falavinha.com.br'
 export const MIN_PASSWORD_LENGTH = 8
-export const MAX_PASSWORD_LENGTH = 128
+// Limite real do bcrypt em bytes UTF-8 (acima de 72 bytes o bcrypt trunca silenciosamente)
+export const MAX_PASSWORD_LENGTH = 72
 
 export const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

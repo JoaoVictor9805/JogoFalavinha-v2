@@ -45,7 +45,7 @@ import cutout7EdWrong from '../../assets/ed/cutout-7-ed-wrong.webp'
 import cutout7EdSuccess from '../../assets/ed/cutout-7-ed-success.webp'
 import tribunalMesaSoloImg from '../../assets/outros/tribunal-mesa-solo.webp'
 import { useGame } from '../../context/gameContextInstance'
-import { CEO_TRIBUNAL_BRIEFING, COUNCIL_MEMBERS, getErrorDialogue } from '../../data/conselhoNextData'
+import { CEO_TRIBUNAL_BRIEFING, COUNCIL_MEMBERS } from '../../data/conselhoNextData'
 import { useTypewriter } from '../../hooks/useTypewriter'
 import { playDialogueBlipSound } from '../../utils/soundEffects'
 
@@ -160,6 +160,10 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     activeMember,
     memberProgress,
     vnFeedback,
+    vnApprovalMessage,
+    vnSpeechText,
+    vnSpeechKey,
+    vnErrorStep,
     isLocked,
     penaltyAlertSeconds,
     actionError,
@@ -188,13 +192,13 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
 
   if (vnFeedback !== prevFeedback) {
     setPrevFeedback(vnFeedback)
-    if (vnFeedback === 'wrong') {
+    if (vnFeedback === 'wrong' || vnFeedback === 'blocked') {
       setIsShowingWrongPose(true)
     }
   }
 
   useEffect(() => {
-    if (!isShowingWrongPose) return undefined
+    if (!isShowingWrongPose || vnFeedback === 'blocked') return undefined
 
     const timer = setTimeout(() => {
       setIsShowingWrongPose(false)
@@ -203,7 +207,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     }, WRONG_POSE_DURATION_MS)
 
     return () => clearTimeout(timer)
-  }, [isShowingWrongPose])
+  }, [isShowingWrongPose, vnFeedback])
 
   const memberId = activeMember?.id
   const scopeKey = isCeoIntro ? 'ceo' : memberId || 0
@@ -232,24 +236,29 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     ? COUNCIL_MEMBERS.find((m) => m.id === memberId)
     : null
 
-  const dynamicErrorSpeech = !isCeoIntro ? getErrorDialogue(progress.errors) : null
   const isApprovedState = !isCeoIntro && vnFeedback === 'approved'
-  const isWrongShake = !isCeoIntro && vnFeedback === 'wrong'
+  const isBlockedState = !isCeoIntro && vnFeedback === 'blocked'
+  const isWrongShake = !isCeoIntro && (vnFeedback === 'wrong' || isBlockedState)
+  const showWrongVisual = isBlockedState || isShowingWrongPose
 
   const speechMode = isCeoIntro
     ? 'ceo'
     : isApprovedState
       ? 'approved'
-      : dynamicErrorSpeech
-        ? 'error'
-        : 'greeting'
+      : isBlockedState
+        ? 'blocked'
+        : vnErrorStep > 0 || progress.errors > 0
+          ? 'error'
+          : 'greeting'
+
+  const isErrorSpeechMode = speechMode === 'error' || speechMode === 'blocked'
 
   const memberConfig = memberId ? MEMBER_CUTOUTS[memberId] : null
   const counselorPoses = isCeoIntro
     ? MEMBER_CUTOUTS[4].default
     : isApprovedState && memberConfig?.success
       ? [memberConfig.success]
-      : isShowingWrongPose && memberConfig?.wrong
+      : showWrongVisual && memberConfig?.wrong
         ? [memberConfig.wrong]
         : memberConfig?.default || MEMBER_CUTOUTS[4].default
   const activePoseCount = counselorPoses.length
@@ -259,8 +268,8 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     : !activeMember
       ? ''
       : isApprovedState
-        ? activeMember.approvalMessage || localMemberMeta?.approvalMessage || ''
-        : dynamicErrorSpeech || activeMember.greeting || localMemberMeta?.greeting || ''
+        ? vnApprovalMessage || 'Você tem o meu voto de aprovação no Conselho Next!'
+        : vnSpeechText || activeMember.greeting || localMemberMeta?.greeting || ''
 
   const speakerKey = isCeoIntro ? 'ceo' : memberId || 'ceo'
 
@@ -275,7 +284,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
 
   const { displayedText, isTyping, isSpeaking, skip } = useTypewriter(currentSpeech, {
     speed: 22,
-    triggerKey: isCeoIntro ? 'ceo-intro' : `${memberId || 0}-${speechMode}-${progress.errors}`,
+    triggerKey: isCeoIntro ? 'ceo-intro' : `${memberId || 0}-${speechMode}-${vnSpeechKey}`,
     onCharacter: handleTypeChar,
   })
 
@@ -308,7 +317,9 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
 
   // "Câmera Viva": Foco centralizado apenas na fala inicial de abertura (greeting sem erros ou intro do CEO)
   const isOpeningSpeech =
-    (isCeoIntro || (speechMode === 'greeting' && progress.errors === 0)) && !isApprovedState
+    (isCeoIntro || (speechMode === 'greeting' && progress.errors === 0)) &&
+    !isApprovedState &&
+    !isBlockedState
   const isIntroSpotlight = isOpeningSpeech && isTyping && !spotlightDismissed
 
   const prevSpotlightRef = useRef(isIntroSpotlight)
@@ -442,11 +453,12 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
 
   const speakerTagClass = isApprovedState
     ? 'bg-emerald-600 text-white border-stone-900'
-    : speechMode === 'error'
+    : isErrorSpeechMode
       ? 'bg-red-600 text-white border-stone-900'
       : theme.tagBg
 
-  const isOptionHovered = Boolean(hoveredOptionId) && !isApprovedState && !isShowingWrongPose
+  const isOptionHovered =
+    Boolean(hoveredOptionId) && !isApprovedState && !showWrongVisual
 
   const portraitReactionClass = isWrongShake
     ? 'animate-vn-shake drop-shadow-[0_0_26px_rgba(220,38,38,0.48)]'
@@ -458,13 +470,13 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
 
   // No estado de erro ou aprovação, garante orientação original sem espelhamento
   const effectiveFlipped =
-    isShowingWrongPose || isApprovedState ? false : isFlipped
+    showWrongVisual || isApprovedState ? false : isFlipped
 
   // Tensão progressiva na tela (1º erro = só reação do personagem; 2º erro = vermelho leve; 3º+ = vermelho marcado)
   const screenTensionLevel =
     isCeoIntro || isApprovedState
       ? 0
-      : progress.errors >= 3
+      : isBlockedState || progress.errors >= 3
         ? 3
         : progress.errors === 2
           ? 2
@@ -475,7 +487,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     ? 'scale-[1.05] lg:translate-x-[34%] lg:scale-[1.09] z-30'
     : isApprovedState
       ? 'lg:translate-x-2 lg:scale-[1.02] z-20'
-      : isShowingWrongPose
+      : showWrongVisual
         ? 'lg:scale-[1.02] z-20'
         : isOptionHovered
           ? 'lg:translate-x-2 lg:rotate-[0.55deg] lg:scale-[1.02] z-20'
@@ -531,7 +543,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
             {!isCeoIntro && progress.errors > 0 && !isApprovedState && (
               <>
                 <span className="opacity-70">·</span>
-                <span>+{progress.errors * 5}s</span>
+                <span>+{progress.errors >= 3 ? 20 : progress.errors * 5}s</span>
                 {progress.errors >= 2 && (
                   <span className="inline-flex items-center gap-1 ml-1 px-1.5 py-0.2 bg-stone-950/85 text-red-200 text-[10px]">
                     <AlertTriangle className="w-3 h-3 text-red-400" />
@@ -545,7 +557,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
           {!isCeoIntro && (
             <button
               type="button"
-              disabled={isLocked || isApprovedState}
+              disabled={isLocked || isApprovedState || isBlockedState}
               onClick={closeMemberDialog}
               className="mb-1.5 inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#FDFBF7] hover:bg-[#D99B38] text-stone-800 hover:text-stone-950 border-2 border-stone-800 rounded-none text-[11px] font-black uppercase tracking-widest shadow-[2px_2px_0px_#1C1917] hover:-translate-y-0.5 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
             >
@@ -572,7 +584,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
               ? 'shadow-[0_18px_48px_rgba(0,0,0,0.6)] border-[#D99B38]'
               : isApprovedState
                 ? 'border-emerald-600 shadow-[6px_6px_0px_#1C1917]'
-                : speechMode === 'error'
+                : isErrorSpeechMode
                   ? 'border-red-600 shadow-[6px_6px_0px_#1C1917]'
                   : 'border-stone-900 shadow-[6px_6px_0px_#1C1917]'
           } ${isTyping || isIntroSpotlight ? 'cursor-pointer' : 'cursor-default'}`}
@@ -588,26 +600,28 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
             <span className="text-stone-500">
               {isApprovedState
                 ? 'Registrando aprovação no Tribunal...'
-                : isIntroSpotlight
-                  ? 'Modo Foco: clique em qualquer lugar (ou Espaço) para ir direto à pergunta'
-                  : isTyping
-                    ? 'Clique na caixa para exibir tudo'
-                    : isCeoIntro
-                      ? 'Clique em "Ver Labirinto & Começar" abaixo para iniciar'
-                      : 'Selecione sua resposta ao lado'}
+                : isBlockedState
+                  ? 'Conselheiro bloqueado por 10s...'
+                  : isIntroSpotlight
+                    ? 'Modo Foco: clique em qualquer lugar (ou Espaço) para ir direto à pergunta'
+                    : isTyping
+                      ? 'Clique na caixa para exibir tudo'
+                      : isCeoIntro
+                        ? 'Clique em "Ver Labirinto & Começar" abaixo para iniciar'
+                        : 'Selecione sua resposta ao lado'}
             </span>
 
             <span
               className={`inline-flex items-center gap-1 font-bold ${
                 isApprovedState
                   ? 'text-emerald-700'
-                  : speechMode === 'error'
+                  : isErrorSpeechMode
                     ? 'text-red-600'
                     : 'text-[#B87D1E]'
               }`}
             >
-              {isApprovedState ? (
-                <span>2,5s</span>
+              {isApprovedState || isBlockedState ? (
+                <span>3,5s</span>
               ) : (
                 <ChevronsRight
                   className={`w-4 h-4 ${!isTyping ? 'animate-vn-caret' : 'opacity-60'}`}
@@ -619,6 +633,12 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
           {isApprovedState && (
             <div className="absolute inset-x-0 bottom-0 h-1.5 bg-[#EBE4D5] overflow-hidden border-t border-emerald-600">
               <div className="h-full bg-emerald-600 animate-reading-bar" />
+            </div>
+          )}
+
+          {isBlockedState && (
+            <div className="absolute inset-x-0 bottom-0 h-1.5 bg-[#EBE4D5] overflow-hidden border-t border-red-600">
+              <div className="h-full bg-red-600 animate-reading-bar" />
             </div>
           )}
         </div>
@@ -700,17 +720,19 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
               </div>
 
               {/* Badge/Carimbo Animado estilo Ace Attorney na frente da mesa (Acerto / Erro) */}
-              {isShowingWrongPose && (
+              {showWrongVisual && (
                 <div
-                  key={`wrong-stamp-${progress.errors}-${penaltyAlertSeconds}`}
+                  key={`wrong-stamp-${vnErrorStep}-${progress.errors}-${penaltyAlertSeconds}`}
                   className="absolute -top-4 right-2 sm:right-4 z-30 animate-vn-stamp"
                 >
                   <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-red-600 text-white border-2 border-stone-950 shadow-[4px_4px_0px_#1C1917] font-black text-xs sm:text-sm uppercase tracking-[0.16em]">
                     <XCircle className="w-4 h-4 shrink-0" />
                     <span>
-                      {penaltyAlertSeconds >= 10
-                        ? `REPROVADO! +${penaltyAlertSeconds}s`
-                        : `OBJEÇÃO! +${penaltyAlertSeconds || 5}s`}
+                      {isBlockedState || vnErrorStep >= 3 || penaltyAlertSeconds >= 10
+                        ? `REPROVADO! +${penaltyAlertSeconds || 10}s`
+                        : vnErrorStep === 2 || progress.errors === 2
+                          ? `INCORRETO! +${penaltyAlertSeconds || 5}s`
+                          : `OBJEÇÃO! +${penaltyAlertSeconds || 5}s`}
                     </span>
                   </div>
                 </div>
@@ -814,15 +836,15 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                       <button
                         key={option.id}
                         type="button"
-                        disabled={isLocked || isOptionDisabled || isApprovedState}
+                        disabled={isLocked || isOptionDisabled || isApprovedState || isBlockedState}
                         onMouseEnter={() => {
-                          if (!isOptionDisabled && !isApprovedState) {
+                          if (!isOptionDisabled && !isApprovedState && !isBlockedState) {
                             setHoveredOptionId(option.id)
                           }
                         }}
                         onMouseLeave={() => setHoveredOptionId(null)}
                         onFocus={() => {
-                          if (!isOptionDisabled && !isApprovedState) {
+                          if (!isOptionDisabled && !isApprovedState && !isBlockedState) {
                             setHoveredOptionId(option.id)
                           }
                         }}

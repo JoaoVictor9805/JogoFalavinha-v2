@@ -5,13 +5,17 @@ import { playArrivalDoorSound as triggerDoorAudio } from '../../utils/soundEffec
 
 function ArrivalTransition() {
   const { finishArrivalTransition } = useGame()
-  const [stageText, setStageText] = useState('Você caminha pelo corredor silencioso do 7º andar...')
+  const [stageText, setStageText] = useState(
+    'Você passa pela entrada da Falavinha... O ambiente está completamente silencioso.'
+  )
 
   useEffect(() => {
     triggerDoorAudio()
 
     const t1 = setTimeout(() => {
-      setStageText('A porta dupla do Tribunal se fecha pesadamente atrás de você.')
+      setStageText(
+        'A porta se fecha pesadamente atrás de você. Você não consegue abri-la novamente.'
+      )
     }, 1650)
 
     const t2 = setTimeout(() => {

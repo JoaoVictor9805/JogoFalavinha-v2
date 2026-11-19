@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { COUNCIL_MEMBERS } from '../data/conselhoNextData'
+import {
+  COUNCIL_MEMBERS,
+  pickErrorDialogue,
+  pickOpeningGreeting,
+} from '../data/conselhoNextData'
 import { apiService } from '../services/apiService'
 import {
   playApprovalSound,
@@ -9,8 +13,9 @@ import {
 } from '../utils/soundEffects'
 import { GameContext } from './gameContextInstance'
 
-const PLAYER_STORAGE_KEY = 'conselho_next_last_player_v2'
+const LEGACY_PLAYER_STORAGE_KEY = 'conselho_next_last_player_v2'
 const OPTION_LABELS = ['a)', 'b)', 'c)', 'd)']
+const FEEDBACK_READING_MS = 3500
 
 // Flag de teste para animação 3D de erro (telefone tocando) na reprovação após 3 erros
 export const ENABLE_3D_ERROR_ANIMATION = true
@@ -40,6 +45,8 @@ function createInitialMemberProgress(membersList = COUNCIL_MEMBERS) {
     initial[member.id] = {
       completed: false,
       errors: 0,
+      totalErrors: 0,
+      penaltySeconds: 0,
       disabledOptions: [],
     }
   })
@@ -50,6 +57,7 @@ function buildProgressFromPartida(partida, membersList = COUNCIL_MEMBERS) {
   const initial = createInitialMemberProgress(membersList)
   const concluidos = partida?.membrosConcluidos || []
   const desabilitadas = partida?.opcoesDesabilitadas || []
+  const tentativasErradas = partida?.tentativas || []
 
   concluidos.forEach((id) => {
     if (initial[id]) {
@@ -63,6 +71,13 @@ function buildProgressFromPartida(partida, membersList = COUNCIL_MEMBERS) {
         new Set([...initial[d.membroId].disabledOptions, d.opcaoId])
       )
       initial[d.membroId].errors = initial[d.membroId].disabledOptions.length
+    }
+  })
+
+  tentativasErradas.forEach((t) => {
+    if (initial[t.desafioId]) {
+      initial[t.desafioId].totalErrors += 1
+      initial[t.desafioId].penaltySeconds += Number(t.penalidadeAplicada) || 5
     }
   })
 
@@ -82,22 +97,9 @@ function buildLocksFromPartida(partida) {
   return locks
 }
 
-function loadSavedPlayerHint() {
+function clearLegacyPlayerStorage() {
   try {
-    const raw = localStorage.getItem(PLAYER_STORAGE_KEY)
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
-function savePlayerHint(jogador) {
-  try {
-    if (jogador) {
-      localStorage.setItem(PLAYER_STORAGE_KEY, JSON.stringify(jogador))
-    } else {
-      localStorage.removeItem(PLAYER_STORAGE_KEY)
-    }
+    localStorage.removeItem(LEGACY_PLAYER_STORAGE_KEY)
   } catch {
     // Armazenamento local indisponível (modo privado)
   }
@@ -107,7 +109,7 @@ export function GameProvider({ children }) {
   // Progressão de telas: 'REGISTRATION' | 'COMIC_INTRO' | 'TRANSITION_ARRIVAL' | 'TRIBUNAL_HUB' | 'FINAL_RANKING'
   const [screen, setScreen] = useState('REGISTRATION')
   const [isRestoringSession, setIsRestoringSession] = useState(true)
-  const [player, setPlayer] = useState(loadSavedPlayerHint)
+  const [player, setPlayer] = useState(null)
   const [activePartida, setActivePartida] = useState(null)
   const [challenges, setChallenges] = useState(() => shuffleChallengesOptions(COUNCIL_MEMBERS))
   const [authError, setAuthError] = useState('')
@@ -135,7 +137,11 @@ export function GameProvider({ children }) {
   )
   const [memberLocks, setMemberLocks] = useState({})
   const [activeMemberId, setActiveMemberId] = useState(null)
-  const [vnFeedback, setVnFeedback] = useState('idle') // 'idle' | 'wrong' | 'approved'
+  const [vnFeedback, setVnFeedback] = useState('idle') // 'idle' | 'wrong' | 'blocked' | 'approved'
+  const [vnApprovalMessage, setVnApprovalMessage] = useState('')
+  const [vnSpeechText, setVnSpeechText] = useState('')
+  const [vnSpeechKey, setVnSpeechKey] = useState(0)
+  const [vnErrorStep, setVnErrorStep] = useState(0)
   const [isLocked, setIsLocked] = useState(false)
   const [ceoBriefingDismissed, setCeoBriefingDismissed] = useState(false)
   const [mazeModal, setMazeModal] = useState(null)
@@ -155,6 +161,7 @@ export function GameProvider({ children }) {
     activePartida: null,
     challenges: COUNCIL_MEMBERS,
     memberProgress: createInitialMemberProgress(COUNCIL_MEMBERS),
+    vnSpeechText: '',
   })
 
   useEffect(() => {
@@ -166,8 +173,71 @@ export function GameProvider({ children }) {
       activePartida,
       challenges,
       memberProgress,
+      vnSpeechText,
     }
-  }, [realSeconds, penaltySeconds, bonusSeconds, player, activePartida, challenges, memberProgress])
+  }, [
+    realSeconds,
+    penaltySeconds,
+    bonusSeconds,
+    player,
+    activePartida,
+    challenges,
+    memberProgress,
+    vnSpeechText,
+  ])
+
+  const registerTimeout = useCallback((fn, delay) => {
+    const id = setTimeout(fn, delay)
+    timersRef.current.push(id)
+    return id
+  }, [])
+
+  const clearAllTimeouts = useCallback(() => {
+    timersRef.current.forEach((id) => clearTimeout(id))
+    timersRef.current = []
+  }, [])
+
+  useEffect(() => {
+    return () => clearAllTimeouts()
+  }, [clearAllTimeouts])
+
+  // Redireciona automaticamente para o login caso a sessão expire ou seja revogada (401)
+  const handleUnauthorizedSession = useCallback(
+    (message) => {
+      clearAllTimeouts()
+      clearLegacyPlayerStorage()
+      lockRef.current = false
+      setIsLocked(false)
+      setChallenges(COUNCIL_MEMBERS)
+      setPlayer(null)
+      setActivePartida(null)
+      setIsTimerRunning(false)
+      setRealSeconds(0)
+      setPenaltySeconds(0)
+      setBonusSeconds(0)
+      setComboAtual(0)
+      setTotalCombos(0)
+      setPenaltyAlert({ key: 0, seconds: 5 })
+      setComboAlert({ key: 0, seconds: 0, label: '' })
+      setMemberProgress(createInitialMemberProgress(COUNCIL_MEMBERS))
+      setMemberLocks({})
+      setActiveMemberId(null)
+      setVnFeedback('idle')
+      setVnApprovalMessage('')
+      setVnSpeechText('')
+      setVnErrorStep(0)
+      setCeoBriefingDismissed(false)
+      setMazeModal(null)
+      setPlayerHistory({ totalTentativas: 0, melhorPartida: null, tentativas: [] })
+      setRankingHistory([])
+      setRankingSetores([])
+      setJustFinished(false)
+      setActionError('')
+      setAuthError(message || 'Sua sessão expirou ou foi encerrada. Faça login novamente.')
+      setScreen('REGISTRATION')
+    },
+    [clearAllTimeouts]
+  )
 
   const recarregarRankings = useCallback(async () => {
     try {
@@ -178,9 +248,13 @@ export function GameProvider({ children }) {
       setRankingHistory(geral || [])
       setRankingSetores(setores || [])
     } catch (err) {
+      if (err?.status === 401) {
+        handleUnauthorizedSession(err.message)
+        return
+      }
       console.warn('[GameContext] Erro ao carregar rankings:', err)
     }
-  }, [])
+  }, [handleUnauthorizedSession])
 
   const carregarHistoricoTentativas = useCallback(async () => {
     try {
@@ -194,44 +268,42 @@ export function GameProvider({ children }) {
         return res
       }
     } catch (err) {
+      if (err?.status === 401) {
+        handleUnauthorizedSession(err.message)
+        return null
+      }
       console.warn('[GameContext] Erro ao carregar histórico de tentativas:', err)
     }
     return null
-  }, [])
+  }, [handleUnauthorizedSession])
 
-  // Boot único: carrega desafios da API, rankings e restaura sessão autenticada (sobrevive ao F5)
+  const carregarDesafiosAutenticado = useCallback(async () => {
+    try {
+      const desafiosApi = await apiService.obterDesafios()
+      if (Array.isArray(desafiosApi) && desafiosApi.length > 0) {
+        const shuffled = shuffleChallengesOptions(desafiosApi)
+        setChallenges(shuffled)
+        return shuffled
+      }
+    } catch (err) {
+      if (err?.status === 401) {
+        handleUnauthorizedSession(err.message)
+        return COUNCIL_MEMBERS
+      }
+      console.warn('[GameContext] Erro ao carregar desafios autenticados:', err)
+      setActionError(
+        'Não foi possível carregar os desafios do servidor. Atualize a página e tente novamente.'
+      )
+    }
+    return COUNCIL_MEMBERS
+  }, [handleUnauthorizedSession])
+
+  // Boot único: limpa qualquer resíduo de localStorage, valida sessão e só então carrega rotas protegidas
   useEffect(() => {
     let cancelled = false
 
     async function bootstrap() {
-      let loadedChallenges = COUNCIL_MEMBERS
-
-      try {
-        const desafiosApi = await apiService.obterDesafios()
-        if (!cancelled && Array.isArray(desafiosApi) && desafiosApi.length > 0) {
-          loadedChallenges = desafiosApi
-        }
-      } catch (err) {
-        console.warn('[GameContext] Usando metadados locais como fallback:', err)
-      }
-
-      const shuffled = shuffleChallengesOptions(loadedChallenges)
-      if (!cancelled) {
-        setChallenges(shuffled)
-      }
-
-      try {
-        const [geral, setores] = await Promise.all([
-          apiService.obterRankingGeral(),
-          apiService.obterRankingSetores(),
-        ])
-        if (!cancelled) {
-          setRankingHistory(geral || [])
-          setRankingSetores(setores || [])
-        }
-      } catch (err) {
-        console.warn('[GameContext] Erro ao carregar rankings iniciais:', err)
-      }
+      clearLegacyPlayerStorage()
 
       try {
         const sessao = await apiService.obterSessao()
@@ -239,20 +311,12 @@ export function GameProvider({ children }) {
 
         const jogador = sessao.jogador
         setPlayer(jogador)
-        savePlayerHint(jogador)
 
-        try {
-          const hist = await apiService.obterMeuHistorico()
-          if (!cancelled && hist) {
-            setPlayerHistory({
-              totalTentativas: hist.totalTentativas || 0,
-              melhorPartida: hist.melhorPartida || null,
-              tentativas: hist.tentativas || [],
-            })
-          }
-        } catch (err) {
-          console.warn('[GameContext] Erro ao restaurar histórico:', err)
-        }
+        const [shuffled] = await Promise.all([
+          carregarDesafiosAutenticado(),
+          recarregarRankings(),
+          carregarHistoricoTentativas(),
+        ])
 
         if (cancelled) return
 
@@ -269,6 +333,9 @@ export function GameProvider({ children }) {
           setTotalCombos(partida.totalCombos || 0)
           setActiveMemberId(null)
           setVnFeedback('idle')
+          setVnApprovalMessage('')
+          setVnSpeechText('')
+          setVnErrorStep(0)
           setMazeModal(null)
           setJustFinished(false)
           setCeoBriefingDismissed(jaIniciouCronometro)
@@ -279,10 +346,11 @@ export function GameProvider({ children }) {
           setIsTimerRunning(false)
           setMemberProgress(createInitialMemberProgress(shuffled))
           setMemberLocks({})
+          setVnApprovalMessage('')
           setScreen('FINAL_RANKING')
         }
       } catch {
-        // Sem sessão ativa: mantém na tela de cadastro/login
+        // Sem sessão ativa: mantém na tela de cadastro/login sem chamar rotas protegidas
       } finally {
         if (!cancelled) {
           setIsRestoringSession(false)
@@ -295,22 +363,7 @@ export function GameProvider({ children }) {
     return () => {
       cancelled = true
     }
-  }, [])
-
-  const registerTimeout = useCallback((fn, delay) => {
-    const id = setTimeout(fn, delay)
-    timersRef.current.push(id)
-    return id
-  }, [])
-
-  const clearAllTimeouts = useCallback(() => {
-    timersRef.current.forEach((id) => clearTimeout(id))
-    timersRef.current = []
-  }, [])
-
-  useEffect(() => {
-    return () => clearAllTimeouts()
-  }, [clearAllTimeouts])
+  }, [carregarDesafiosAutenticado, carregarHistoricoTentativas, recarregarRankings])
 
   // Cronômetro global em segundo plano
   useEffect(() => {
@@ -347,18 +400,27 @@ export function GameProvider({ children }) {
     return () => clearInterval(interval)
   }, [hasActiveLocks])
 
-  // Sincronização periódica do tempo no banco a cada 10 segundos
+  // Sincronização periódica com o relógio oficial do servidor a cada 10 segundos
   useEffect(() => {
     if (!isTimerRunning || !activePartida?.id) return undefined
 
     const syncInterval = setInterval(() => {
       apiService
-        .sincronizarTempo(activePartida.id, stateSnapshotRef.current.realSeconds)
-        .catch(() => {})
+        .sincronizarTempo(activePartida.id)
+        .then((res) => {
+          if (typeof res?.segundosReais === 'number') {
+            setRealSeconds((prev) => Math.max(prev, res.segundosReais))
+          }
+        })
+        .catch((err) => {
+          if (err?.status === 401) {
+            handleUnauthorizedSession(err.message)
+          }
+        })
     }, 10000)
 
     return () => clearInterval(syncInterval)
-  }, [isTimerRunning, activePartida?.id])
+  }, [isTimerRunning, activePartida?.id, handleUnauthorizedSession])
 
   const totalSeconds = Math.max(
     realSeconds === 0 && penaltySeconds === 0 && bonusSeconds === 0 ? 0 : 1,
@@ -433,13 +495,13 @@ export function GameProvider({ children }) {
 
         const jogador = cadRes.jogador
         setPlayer(jogador)
-        savePlayerHint(jogador)
 
-        const partidaRes = await apiService.iniciarPartida({ forceNew: true })
+        const [shuffled, partidaRes] = await Promise.all([
+          carregarDesafiosAutenticado(),
+          apiService.iniciarPartida({ forceNew: true }),
+        ])
         setActivePartida(partidaRes.partida)
 
-        const shuffled = shuffleChallengesOptions(stateSnapshotRef.current.challenges)
-        setChallenges(shuffled)
         setMemberProgress(createInitialMemberProgress(shuffled))
         setMemberLocks({})
         setRealSeconds(0)
@@ -451,6 +513,7 @@ export function GameProvider({ children }) {
         setComboAlert({ key: 0, seconds: 0, label: '' })
         setActiveMemberId(null)
         setVnFeedback('idle')
+        setVnApprovalMessage('')
         setCeoBriefingDismissed(false)
         setMazeModal(null)
         setIsTimerRunning(false)
@@ -464,7 +527,7 @@ export function GameProvider({ children }) {
         setIsLocked(false)
       }
     },
-    [clearAllTimeouts]
+    [carregarDesafiosAutenticado, clearAllTimeouts]
   )
 
   // 1B. Iniciar ou Retomar jogo através do LOGIN
@@ -485,12 +548,12 @@ export function GameProvider({ children }) {
 
         const jogador = loginRes.jogador
         setPlayer(jogador)
-        savePlayerHint(jogador)
 
-        await Promise.all([carregarHistoricoTentativas(), recarregarRankings()])
-
-        const shuffled = shuffleChallengesOptions(stateSnapshotRef.current.challenges)
-        setChallenges(shuffled)
+        const [shuffled] = await Promise.all([
+          carregarDesafiosAutenticado(),
+          carregarHistoricoTentativas(),
+          recarregarRankings(),
+        ])
 
         const partida = loginRes.partidaEmAndamento
 
@@ -508,6 +571,9 @@ export function GameProvider({ children }) {
           setComboAlert({ key: 0, seconds: 0, label: '' })
           setActiveMemberId(null)
           setVnFeedback('idle')
+          setVnApprovalMessage('')
+          setVnSpeechText('')
+          setVnErrorStep(0)
           setMazeModal(null)
           setJustFinished(false)
           setCeoBriefingDismissed(jaIniciouCronometro)
@@ -527,6 +593,7 @@ export function GameProvider({ children }) {
           setMemberLocks({})
           setActiveMemberId(null)
           setVnFeedback('idle')
+          setVnApprovalMessage('')
           setCeoBriefingDismissed(false)
           setMazeModal(null)
           setJustFinished(false)
@@ -540,7 +607,7 @@ export function GameProvider({ children }) {
         setIsLocked(false)
       }
     },
-    [carregarHistoricoTentativas, clearAllTimeouts, recarregarRankings]
+    [carregarDesafiosAutenticado, carregarHistoricoTentativas, clearAllTimeouts, recarregarRankings]
   )
 
   // Abre o modal 3D de apresentação após o CEO explicar as regras
@@ -551,14 +618,39 @@ export function GameProvider({ children }) {
     })
   }, [triggerBlackoutTransition])
 
-  // Confirma "OK" no modal inicial do labirinto: registra largada no servidor e inicia cronômetro
-  const confirmIntroMazeAndStart = useCallback(() => {
+  // Confirma "OK" no modal inicial do labirinto: garante largada registrada no servidor antes de iniciar
+  const confirmIntroMazeAndStart = useCallback(async () => {
+    if (lockRef.current) return
     playSelectSound()
+    setActionError('')
     const partidaId = stateSnapshotRef.current.activePartida?.id
+
     if (partidaId) {
-      apiService.iniciarCronometro(partidaId).catch((err) => {
+      lockRef.current = true
+      setIsLocked(true)
+      try {
+        const res = await apiService.iniciarCronometro(partidaId)
+        if (typeof res?.segundosReais === 'number') {
+          setRealSeconds(res.segundosReais)
+        }
+        setActivePartida((prev) =>
+          prev
+            ? { ...prev, cronometroIniciadoEm: res?.cronometroIniciadoEm || prev.cronometroIniciadoEm }
+            : prev
+        )
+      } catch (err) {
+        if (err?.status === 401) {
+          handleUnauthorizedSession(err.message)
+          return
+        }
         console.warn('[GameContext] Falha ao registrar início do cronômetro:', err)
-      })
+        setActionError(
+          err?.message || 'Não foi possível iniciar o cronômetro no servidor. Tente novamente.'
+        )
+        lockRef.current = false
+        setIsLocked(false)
+        return
+      }
     }
 
     triggerBlackoutTransition(() => {
@@ -566,7 +658,7 @@ export function GameProvider({ children }) {
       setCeoBriefingDismissed(true)
       setIsTimerRunning(true)
     })
-  }, [triggerBlackoutTransition])
+  }, [handleUnauthorizedSession, triggerBlackoutTransition])
 
   // Abre o modal do mapa manualmente (sem fade para preto)
   const openManualMazeModal = useCallback(() => {
@@ -630,12 +722,40 @@ export function GameProvider({ children }) {
         return
       }
 
+      const member = challenges.find((m) => m.id === memberId)
+      const completedMemberIds = Object.entries(memberProgress)
+        .filter(([, prog]) => prog?.completed)
+        .map(([id]) => Number(id))
+      const remainingMemberIds = challenges
+        .filter((m) => !memberProgress[m.id]?.completed && m.id !== memberId)
+        .map((m) => m.id)
+
+      const initialSpeech =
+        status.errors > 0
+          ? pickErrorDialogue({
+              memberId,
+              errorNumber: status.errors,
+              isBlocked: false,
+              completedMemberIds,
+              remainingMemberIds,
+            })
+          : pickOpeningGreeting({
+              memberId,
+              defaultGreeting: member?.greeting || '',
+              completedMemberIds,
+              totalMembers: challenges.length || 7,
+            })
+
       playSelectSound()
       setActionError('')
       setVnFeedback('idle')
+      setVnApprovalMessage('')
+      setVnErrorStep(status.errors || 0)
+      setVnSpeechText(initialSpeech || member?.greeting || '')
+      setVnSpeechKey((prev) => prev + 1)
       setActiveMemberId(memberId)
     },
-    [memberLocks, memberProgress]
+    [challenges, memberLocks, memberProgress]
   )
 
   const closeMemberDialog = useCallback(() => {
@@ -643,6 +763,9 @@ export function GameProvider({ children }) {
     playSelectSound()
     setActionError('')
     setVnFeedback('idle')
+    setVnApprovalMessage('')
+    setVnSpeechText('')
+    setVnErrorStep(0)
     setActiveMemberId(null)
   }, [])
 
@@ -665,13 +788,10 @@ export function GameProvider({ children }) {
       lockRef.current = true
       setIsLocked(true)
 
-      const currentRealSec = stateSnapshotRef.current.realSeconds
-
       try {
         const resultado = await apiService.validarResposta(partidaId, {
           membroId: memberId,
           opcaoId: optionId,
-          segundosReais: currentRealSec,
         })
 
         if (typeof resultado.segundosReais === 'number') {
@@ -680,6 +800,11 @@ export function GameProvider({ children }) {
 
         if (resultado.acertou) {
           playApprovalSound()
+          const approvalMsg = resultado.mensagemAprovacao || ''
+          setVnApprovalMessage(approvalMsg)
+          setVnSpeechText(approvalMsg)
+          setVnSpeechKey((prev) => prev + 1)
+          setVnErrorStep(0)
           setVnFeedback('approved')
           setComboAtual(resultado.comboAtual ?? 0)
           if (typeof resultado.segundosBonus === 'number') {
@@ -726,6 +851,9 @@ export function GameProvider({ children }) {
             setMemberProgress(nextProgress)
             setActiveMemberId(null)
             setVnFeedback('idle')
+            setVnApprovalMessage('')
+            setVnSpeechText('')
+            setVnErrorStep(0)
             setActivePartida(resultado.partida)
 
             const allCompleted = resultado.jogoConcluido
@@ -756,7 +884,7 @@ export function GameProvider({ children }) {
 
             lockRef.current = false
             setIsLocked(false)
-          }, 2500)
+          }, FEEDBACK_READING_MS)
         } else {
           playPenaltySound()
           const appliedPenalty = resultado.penalidade || 5
@@ -765,41 +893,79 @@ export function GameProvider({ children }) {
           )
           setPenaltyAlert((prev) => ({ key: prev.key + 1, seconds: appliedPenalty }))
           setComboAtual(0)
-          setVnFeedback('wrong')
           setActivePartida(resultado.partida)
+
+          const completedMemberIds = Object.entries(stateSnapshotRef.current.memberProgress)
+            .filter(([, prog]) => prog?.completed)
+            .map(([id]) => Number(id))
+          const remainingMemberIds = stateSnapshotRef.current.challenges
+            .filter((m) => !stateSnapshotRef.current.memberProgress[m.id]?.completed && m.id !== member.id)
+            .map((m) => m.id)
 
           if (resultado.reprovado) {
             const lockUntilMs = resultado.bloqueadoAte
               ? new Date(resultado.bloqueadoAte).getTime()
               : Date.now() + (resultado.bloqueioSegundos || 10) * 1000
 
+            const blockSpeech = pickErrorDialogue({
+              memberId: member.id,
+              errorNumber: 3,
+              isBlocked: true,
+              completedMemberIds,
+              remainingMemberIds,
+              lastSpeech: stateSnapshotRef.current.vnSpeechText,
+            })
+
             setMemberLocks((prev) => ({
               ...prev,
               [member.id]: lockUntilMs,
             }))
 
-            // Reseta erros/desabilitadas locais e reembaralha as 4 alternativas do conselheiro
-            setMemberProgress((prev) => ({
-              ...prev,
-              [member.id]: {
-                ...prev[member.id],
-                errors: 0,
-                disabledOptions: [],
-              },
-            }))
+            // Durante os 3,5s de leitura da reprovação, mantém os 3 erros visíveis antes de resetar e embaralhar
+            setMemberProgress((prev) => {
+              const current = prev[member.id]
+              const updatedDisabled = Array.from(new Set([...current.disabledOptions, optionId]))
+              return {
+                ...prev,
+                [member.id]: {
+                  ...current,
+                  errors: 3,
+                  totalErrors: (current?.totalErrors || 0) + 1,
+                  penaltySeconds: (current?.penaltySeconds || 0) + appliedPenalty,
+                  disabledOptions: updatedDisabled,
+                },
+              }
+            })
 
-            setChallenges((prev) =>
-              prev.map((m) =>
-                m.id === member.id ? { ...m, options: shuffleOptionsList(m.options) } : m
-              )
-            )
+            setVnErrorStep(3)
+            setVnSpeechText(blockSpeech)
+            setVnSpeechKey((prev) => prev + 1)
+            setVnFeedback('blocked')
 
             registerTimeout(() => {
               const done = Object.values(stateSnapshotRef.current.memberProgress).filter(
                 (item) => item.completed
               ).length
 
+              // Reseta erros/desabilitadas do ciclo atual, preservando o acumulado total para o resumo final
+              setMemberProgress((prev) => ({
+                ...prev,
+                [member.id]: {
+                  ...prev[member.id],
+                  errors: 0,
+                  disabledOptions: [],
+                },
+              }))
+
+              setChallenges((prev) =>
+                prev.map((m) =>
+                  m.id === member.id ? { ...m, options: shuffleOptionsList(m.options) } : m
+                )
+              )
+
               setVnFeedback('idle')
+              setVnSpeechText('')
+              setVnErrorStep(0)
               setActiveMemberId(null)
               lockRef.current = false
               setIsLocked(false)
@@ -813,8 +979,18 @@ export function GameProvider({ children }) {
                   lockSeconds: resultado.bloqueioSegundos || 10,
                 })
               }
-            }, 950)
+            }, FEEDBACK_READING_MS)
           } else {
+            const nextErrorNumber = (progress.errors || 0) + 1
+            const errorSpeech = pickErrorDialogue({
+              memberId: member.id,
+              errorNumber: nextErrorNumber,
+              isBlocked: false,
+              completedMemberIds,
+              remainingMemberIds,
+              lastSpeech: stateSnapshotRef.current.vnSpeechText,
+            })
+
             setMemberProgress((prev) => {
               const current = prev[member.id]
               const updatedDisabled = Array.from(new Set([...current.disabledOptions, optionId]))
@@ -823,10 +999,17 @@ export function GameProvider({ children }) {
                 [member.id]: {
                   ...current,
                   errors: current.errors + 1,
+                  totalErrors: (current.totalErrors || 0) + 1,
+                  penaltySeconds: (current.penaltySeconds || 0) + appliedPenalty,
                   disabledOptions: updatedDisabled,
                 },
               }
             })
+
+            setVnErrorStep(nextErrorNumber)
+            setVnSpeechText(errorSpeech)
+            setVnSpeechKey((prev) => prev + 1)
+            setVnFeedback('wrong')
 
             registerTimeout(() => {
               setVnFeedback('idle')
@@ -836,12 +1019,18 @@ export function GameProvider({ children }) {
           }
         }
       } catch (error) {
+        if (error?.status === 401) {
+          handleUnauthorizedSession(error.message)
+          return
+        }
         console.error('[GameContext] Erro ao validar resposta:', error)
 
         if (error?.status === 423 && error?.data?.bloqueadoAte) {
           const lockUntilMs = new Date(error.data.bloqueadoAte).getTime()
           setMemberLocks((prev) => ({ ...prev, [memberId]: lockUntilMs }))
           setVnFeedback('idle')
+          setVnSpeechText('')
+          setVnErrorStep(0)
           setActiveMemberId(null)
         }
 
@@ -853,7 +1042,14 @@ export function GameProvider({ children }) {
         setIsLocked(false)
       }
     },
-    [carregarHistoricoTentativas, challenges, memberProgress, recarregarRankings, registerTimeout]
+    [
+      carregarHistoricoTentativas,
+      challenges,
+      handleUnauthorizedSession,
+      memberProgress,
+      recarregarRankings,
+      registerTimeout,
+    ]
   )
 
   // Reiniciar jogo a partir da Tela Final / Ranking
@@ -872,8 +1068,18 @@ export function GameProvider({ children }) {
     }
 
     try {
-      const novaPartida = await apiService.iniciarPartida({ forceNew: true })
-      const shuffled = shuffleChallengesOptions(stateSnapshotRef.current.challenges)
+      const currentChallenges = stateSnapshotRef.current.challenges
+      const hasLoadedQuestions =
+        Array.isArray(currentChallenges) &&
+        currentChallenges.length > 0 &&
+        currentChallenges.every((c) => Array.isArray(c.options) && c.options.length > 0)
+
+      const [novaPartida, shuffled] = await Promise.all([
+        apiService.iniciarPartida({ forceNew: true }),
+        hasLoadedQuestions
+          ? Promise.resolve(shuffleChallengesOptions(currentChallenges))
+          : carregarDesafiosAutenticado(),
+      ])
 
       setActivePartida(novaPartida.partida)
       setChallenges(shuffled)
@@ -889,11 +1095,18 @@ export function GameProvider({ children }) {
       setMemberLocks({})
       setActiveMemberId(null)
       setVnFeedback('idle')
+      setVnApprovalMessage('')
+      setVnSpeechText('')
+      setVnErrorStep(0)
       setCeoBriefingDismissed(false)
       setMazeModal(null)
       setJustFinished(false)
       setScreen('COMIC_INTRO')
     } catch (err) {
+      if (err?.status === 401) {
+        handleUnauthorizedSession(err.message)
+        return
+      }
       console.error('[GameContext] Erro ao iniciar nova partida:', err)
       setActionError(
         err?.message || 'Não foi possível iniciar uma nova partida agora. Tente novamente.'
@@ -902,9 +1115,9 @@ export function GameProvider({ children }) {
       lockRef.current = false
       setIsLocked(false)
     }
-  }, [clearAllTimeouts])
+  }, [carregarDesafiosAutenticado, clearAllTimeouts, handleUnauthorizedSession])
 
-  // Desconectar e voltar para a tela de login/cadastro
+  // Desconectar e voltar para a tela de login/cadastro (limpando perguntas da memória do React)
   const logout = useCallback(async () => {
     clearAllTimeouts()
     try {
@@ -912,9 +1125,8 @@ export function GameProvider({ children }) {
     } catch (err) {
       console.warn('[GameContext] Erro ao encerrar sessão no servidor:', err)
     }
-    savePlayerHint(null)
-    const shuffled = shuffleChallengesOptions(stateSnapshotRef.current.challenges)
-    setChallenges(shuffled)
+    clearLegacyPlayerStorage()
+    setChallenges(COUNCIL_MEMBERS)
     setPlayer(null)
     setActivePartida(null)
     setIsTimerRunning(false)
@@ -925,9 +1137,18 @@ export function GameProvider({ children }) {
     setTotalCombos(0)
     setPenaltyAlert({ key: 0, seconds: 5 })
     setComboAlert({ key: 0, seconds: 0, label: '' })
-    setMemberProgress(createInitialMemberProgress(shuffled))
+    setMemberProgress(createInitialMemberProgress(COUNCIL_MEMBERS))
     setMemberLocks({})
+    setActiveMemberId(null)
+    setVnFeedback('idle')
     setPlayerHistory({ totalTentativas: 0, melhorPartida: null, tentativas: [] })
+    setRankingHistory([])
+    setRankingSetores([])
+    setVnApprovalMessage('')
+    setVnSpeechText('')
+    setVnErrorStep(0)
+    setCeoBriefingDismissed(false)
+    setMazeModal(null)
     setActionError('')
     setAuthError('')
     setJustFinished(false)
@@ -962,6 +1183,10 @@ export function GameProvider({ children }) {
       activeMember,
       activeMemberId,
       vnFeedback,
+      vnApprovalMessage,
+      vnSpeechText,
+      vnSpeechKey,
+      vnErrorStep,
       isLocked,
       ceoBriefingDismissed,
       mazeModal,
@@ -1013,6 +1238,10 @@ export function GameProvider({ children }) {
       activeMember,
       activeMemberId,
       vnFeedback,
+      vnApprovalMessage,
+      vnSpeechText,
+      vnSpeechKey,
+      vnErrorStep,
       isLocked,
       ceoBriefingDismissed,
       mazeModal,

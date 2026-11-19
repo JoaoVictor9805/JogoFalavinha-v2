@@ -1,7 +1,119 @@
 /**
- * Falas dinâmicas de erro (limite de 5).
- * A cada erro cometido com um membro do Conselho, a fala de reação muda.
- * Se passar do 5º erro, repete a última frase.
+ * Referências de nome falado e gênero gramatical de cada conselheiro
+ * para montagem natural das falas cruzadas no Tribunal.
+ */
+export const COUNCIL_SPEAKER_REFS = {
+  1: { nome: 'Sapo', genero: 'm' },
+  2: { nome: 'Ramon', genero: 'm' },
+  3: { nome: 'Vanessa', genero: 'f' },
+  4: { nome: 'Jhonny', genero: 'm' },
+  5: { nome: 'Juarez', genero: 'm' },
+  6: { nome: 'Ricardo', genero: 'm' },
+  7: { nome: 'Ed', genero: 'm' },
+}
+
+/**
+ * Falas personalizadas de erro para cada um dos 7 conselheiros:
+ * - error1: 1º erro no ciclo
+ * - error2: 2º erro no ciclo
+ * - blocked: 3º erro no ciclo (reprovação + bloqueio de 10s)
+ */
+export const MEMBER_ERROR_DIALOGUES = {
+  1: {
+    error1:
+      'Opa, passou longe! Puxa aí na memória onde a Falavinha está presente e tenta de novo.',
+    error2:
+      'Ainda não, hein... Pensa bem nos nossos endereços físicos. Última chance antes de eu fechar a porta!',
+    blocked:
+      'Aí não dá, né? Dá uma volta pelo Tribunal, respira fundo e volta aqui daqui a 10 segundos!',
+  },
+  2: {
+    error1:
+      'Hmm, essa não bate com a nossa cultura. Releia com calma e pense no que realmente nos move aqui dentro.',
+    error2:
+      'Ainda não é essa... Foco na solução, não no chute! Mais um erro e você vai precisar de uma pausa.',
+    blocked:
+      'Poxa, assim fica difícil defender! Vou te dar 10 segundos para repensar nossos pilares antes de tentar de novo.',
+  },
+  3: {
+    error1:
+      'Calma, não é bem por aí! Respira e pensa no propósito que a gente vive no dia a dia. Você sabe essa!',
+    error2:
+      'Ainda não! Eu confio em você, mas olha bem as opções — mais um erro e vou ter que pausar a sua tentativa.',
+    blocked:
+      'Ai, doeu em mim, mas tive que reprovar! Dá uma espairecida de 10 segundos e volta com tudo, combinado?',
+  },
+  4: {
+    error1:
+      'Eita, tá faltando aparecer nas integrações, hein? Pensa bem no evento que fecha todo mês com a equipe!',
+    error2:
+      'Ainda não! Como assim você esqueceu desse clássico da última quarta-feira do mês? Cuidado com o 3º erro!',
+    blocked:
+      'Reprovado! Vai ficar 10 segundos pensando no que anda perdendo na última semana do mês... Depois volta aqui!',
+  },
+  5: {
+    error1:
+      'Opa, deu divergência no espelho aí! Esse não é o nosso sistema de ponto. Tenta de novo!',
+    error2:
+      'De novo não! Tô começando a achar que você anda esquecendo de bater o ponto... Atenção máxima na próxima!',
+    blocked:
+      'Bateu errado pela terceira vez! Bloqueio de 10 segundos — aproveita para ficar DE OLHO NO PONTO!!',
+  },
+  6: {
+    error1:
+      'Erro 404 nessa resposta! Esse aí não é o nosso ERP. Dá uma revisada e manda de novo.',
+    error2:
+      'Travou o sistema? Ainda não é esse! Pensa na ferramenta que conecta todos os setores. Próximo erro dá tela azul!',
+    blocked:
+      'Sistema indisponível por 10 segundos! Aproveita o reboot para lembrar qual é o melhor ERP do mercado.',
+  },
+  7: {
+    error1:
+      'Hmm, esse visual não passa na recepção, não! Lembra das lições do PEAH e tenta novamente.',
+    error2:
+      'Ainda fora do padrão! Olha a seriedade da nossa imagem — mais um deslize e você vai precisar de um tempo para ajustar o look!',
+    blocked:
+      'Reprovado no quesito apresentação! 10 segundos fora da sala para revisar o PEAH e praticar o ECS antes de voltar.',
+  },
+}
+
+/**
+ * Falas cruzadas de erro citando um conselheiro que JÁ aprovou o jogador na partida.
+ */
+export const CROSS_TALK_ERROR_APPROVED = [
+  'Como é que {o_a} {nome} deixou você passar?! Tenta de novo!',
+  'Impossível você ter sido aprovado {pelo_pela} {nome} respondendo isso...',
+  'Vou ter que chamar {o_a} {nome} aqui para perguntar que prova fácil foi essa que você fez lá!',
+  'Sério isso? {O_A} {nome} te aprovou e você escorrega logo na minha cadeira?',
+  'Acho que {o_a} {nome} pegou leve demais com você, hein... Presta mais atenção!',
+  'Se {o_a} {nome} visse essa resposta agora, ia pedir o voto de volta na hora!',
+]
+
+export const CROSS_TALK_BLOCKED_APPROVED =
+  'Não acredito que {o_a} {nome} te deu o voto! Vai descansar 10 segundos e volta mais ligado.'
+
+/**
+ * Falas cruzadas de erro citando um conselheiro que AINDA falta enfrentar.
+ */
+export const CROSS_TALK_ERROR_PENDING = [
+  'Se já está suando aqui, imagina quando sentar na frente {do_da} {nome}...',
+  'Desse jeito {o_a} {nome} nem vai deixar você terminar a frase! Concentra!',
+  'Olha o tempo correndo... Você ainda precisa encarar {o_a} {nome}, então foca aqui!',
+]
+
+/**
+ * Falas cruzadas opcionais de saudação ao abrir uma cadeira.
+ */
+export const CROSS_TALK_GREETING_APPROVED = [
+  'Vi que você já garantiu o voto {do_da} {nome}... vamos ver se aqui vai ser fácil assim!',
+  'Fiquei sabendo que você se saiu bem com {o_a} {nome}. Quero ver agora na minha área!',
+]
+
+export const FINAL_MEMBER_GREETING =
+  'Só falto eu para fechar o Conselho! Não vai escorregar logo na linha de chegada, né?'
+
+/**
+ * Fallback genérico de falas de erro (caso um membroId não esteja mapeado).
  */
 export const ERROR_DIALOGUES = [
   'Vamos tentar de novo, preste mais atenção.',
@@ -11,10 +123,117 @@ export const ERROR_DIALOGUES = [
   'Atenção máxima antes de responder novamente!',
 ]
 
+function pickRandom(list) {
+  if (!Array.isArray(list) || list.length === 0) return null
+  return list[Math.floor(Math.random() * list.length)]
+}
+
+export function formatCrossTalkSpeech(template, ref) {
+  if (!template || !ref) return template || ''
+  const isFem = ref.genero === 'f'
+  return template
+    .replaceAll('{o_a}', isFem ? 'a' : 'o')
+    .replaceAll('{O_A}', isFem ? 'A' : 'O')
+    .replaceAll('{pelo_pela}', isFem ? 'pela' : 'pelo')
+    .replaceAll('{do_da}', isFem ? 'da' : 'do')
+    .replaceAll('{pro_pra}', isFem ? 'pra' : 'pro')
+    .replaceAll('{nome}', ref.nome)
+}
+
 export function getErrorDialogue(errorCount) {
   if (!errorCount || errorCount <= 0) return null
   const idx = Math.min(errorCount - 1, ERROR_DIALOGUES.length - 1)
   return ERROR_DIALOGUES[idx]
+}
+
+/**
+ * Escolhe a saudação ao abrir um conselheiro:
+ * - Se for o 7º e último conselheiro restante, dispara a frase especial de reta final.
+ * - Se o jogador já passou por outros conselheiros, tem 25% de chance de abrir com fala cruzada.
+ * - Caso contrário, exibe a saudação oficial daquele conselheiro.
+ */
+export function pickOpeningGreeting({
+  memberId,
+  defaultGreeting = '',
+  completedMemberIds = [],
+  totalMembers = 7,
+}) {
+  const othersCompleted = completedMemberIds
+    .map(Number)
+    .filter((id) => id !== memberId && Boolean(COUNCIL_SPEAKER_REFS[id]))
+
+  if (totalMembers > 1 && othersCompleted.length >= totalMembers - 1) {
+    return FINAL_MEMBER_GREETING
+  }
+
+  if (othersCompleted.length > 0 && Math.random() < 0.25) {
+    const refId = pickRandom(othersCompleted)
+    const template = pickRandom(CROSS_TALK_GREETING_APPROVED)
+    if (refId && template) {
+      return formatCrossTalkSpeech(template, COUNCIL_SPEAKER_REFS[refId])
+    }
+  }
+
+  return defaultGreeting
+}
+
+/**
+ * Escolhe a fala de erro dinâmica do conselheiro:
+ * - Combina falas personalizadas por conselheiro + nível do erro (1º, 2º ou 3º bloqueio)
+ *   com falas cruzadas que citam conselheiros reais já aprovados ou ainda pendentes.
+ */
+export function pickErrorDialogue({
+  memberId,
+  errorNumber = 1,
+  isBlocked = false,
+  completedMemberIds = [],
+  remainingMemberIds = [],
+  lastSpeech = '',
+  allowCrossTalk = true,
+}) {
+  const othersCompleted = completedMemberIds
+    .map(Number)
+    .filter((id) => id !== memberId && Boolean(COUNCIL_SPEAKER_REFS[id]))
+  const othersRemaining = remainingMemberIds
+    .map(Number)
+    .filter((id) => id !== memberId && Boolean(COUNCIL_SPEAKER_REFS[id]))
+
+  const memberSet = MEMBER_ERROR_DIALOGUES[memberId]
+
+  if (isBlocked) {
+    if (allowCrossTalk && othersCompleted.length > 0 && Math.random() < 0.4) {
+      const refId = pickRandom(othersCompleted)
+      return formatCrossTalkSpeech(CROSS_TALK_BLOCKED_APPROVED, COUNCIL_SPEAKER_REFS[refId])
+    }
+    return memberSet?.blocked || getErrorDialogue(3)
+  }
+
+  const canCrossTalk =
+    allowCrossTalk && (othersCompleted.length > 0 || othersRemaining.length > 0)
+
+  if (canCrossTalk && Math.random() < 0.45) {
+    const useApproved =
+      othersCompleted.length > 0 && (othersRemaining.length === 0 || Math.random() < 0.72)
+
+    const refId = useApproved ? pickRandom(othersCompleted) : pickRandom(othersRemaining)
+    const templates = useApproved ? CROSS_TALK_ERROR_APPROVED : CROSS_TALK_ERROR_PENDING
+    const candidates = templates
+      .map((tpl) => formatCrossTalkSpeech(tpl, COUNCIL_SPEAKER_REFS[refId]))
+      .filter((line) => line !== lastSpeech)
+
+    const chosen = pickRandom(candidates.length > 0 ? candidates : templates)
+    if (chosen) {
+      return chosen.includes('{')
+        ? formatCrossTalkSpeech(chosen, COUNCIL_SPEAKER_REFS[refId])
+        : chosen
+    }
+  }
+
+  if (memberSet) {
+    return errorNumber >= 2 ? memberSet.error2 : memberSet.error1
+  }
+
+  return getErrorDialogue(errorNumber)
 }
 
 export const UNITS_LIST = [
@@ -74,12 +293,12 @@ export const CEO_TRIBUNAL_BRIEFING = {
   name: 'Jhonny',
   title: 'CEO · Presidente do Conselho',
   message:
-    'Bem-vindo ao Conselho Next! Diante de você estão as 7 lideranças da empresa, e você pode escolhê-las em qualquer ordem. Acertar 3 conselheiros seguidos de primeira dá -5s de bônus (e fechar invicto dá -10s extras!). Mas atenção: cada erro soma +5s e, no 3º erro na mesma cadeira, você leva +10s e o conselheiro fica bloqueado por 10s. Clique em avançar para conhecer o labirinto e começar!',
+    'Seja bem-vindo ao Conselho Next! Logo adiante, estarão os 7 conselheiros que decidiram fazer parte dessa sua avaliação. Você poderá conversar com eles na ordem que preferir... mas não se engane: todos estarão de olho nas suas respostas, e isso vai decidir o seu futuro por aqui. A cada aprovação conquistada, você avançará mais um passo no labirinto até alcançar a sala do cliente. O seu desempenho será medido pelo tempo total de prova — e, atenção, cada erro somará +5s ao relógio. Se errar 3 vezes na mesma cadeira, você levará +10s, precisará refazer a questão e aquele conselheiro só voltará a te receber depois de 10s. Mas calma, nem tudo é notícia ruim... Acertar 3 conselheiros seguidos de primeira garante -5s de bônus, e fechar o Conselho invicto rende mais -10s extras! Agora é por sua própria conta e risco: abra o labirinto e comece o desafio.',
 }
 
 /**
- * Metadados base de fallback dos 7 membros do Conselho Next (SEM gabarito no frontend).
- * A fonte oficial de perguntas e opções é `GET /api/desafios`, e toda validação é server-side.
+ * Metadados puramente visuais dos 7 membros do Conselho Next (SEM perguntas, opções ou gabarito no bundle).
+ * A fonte oficial e única de perguntas e alternativas é `GET /api/desafios` (rota autenticada).
  */
 export const COUNCIL_MEMBERS = [
   {
@@ -93,16 +312,6 @@ export const COUNCIL_MEMBERS = [
     borderAccent: 'border-sky-400',
     glowAccent: 'shadow-sky-500/25',
     badgeBg: 'bg-sky-500/20 text-sky-300 border-sky-400/40',
-    type: 'multiple_choice',
-    greeting:
-      'Vamos começar pelo básico sobre quem somos e onde estamos presentes. Mostre que conhece nossa estrutura!',
-    question: 'Quantas unidades físicas temos?',
-    options: [
-      { id: 'a', label: 'a)', text: '5' },
-      { id: 'b', label: 'b)', text: '2' },
-      { id: 'c', label: 'c)', text: '3' },
-      { id: 'd', label: 'd)', text: '7' },
-    ],
   },
   {
     id: 2,
@@ -115,16 +324,6 @@ export const COUNCIL_MEMBERS = [
     borderAccent: 'border-teal-400',
     glowAccent: 'shadow-teal-500/25',
     badgeBg: 'bg-teal-500/20 text-teal-300 border-teal-400/40',
-    type: 'multiple_choice',
-    greeting:
-      'Nossos valores guiam cada decisão no dia a dia. Quero ver se você tem os pilares da Falavinha Next na ponta da língua.',
-    question: 'Quais desses é um dos nossos valores?',
-    options: [
-      { id: 'a', label: 'a)', text: 'Energia para transformar' },
-      { id: 'b', label: 'b)', text: 'Comunicação assertiva' },
-      { id: 'c', label: 'c)', text: 'Resultados rápidos' },
-      { id: 'd', label: 'd)', text: 'Coletividade' },
-    ],
   },
   {
     id: 3,
@@ -137,16 +336,6 @@ export const COUNCIL_MEMBERS = [
     borderAccent: 'border-amber-400',
     glowAccent: 'shadow-amber-500/25',
     badgeBg: 'bg-amber-500/20 text-amber-300 border-amber-400/40',
-    type: 'multiple_choice',
-    greeting:
-      'Mais do que executar tarefas, existe uma mentalidade que define o nosso time. Responda com convicção:',
-    question: 'O que é ser Next?',
-    options: [
-      { id: 'a', label: 'a)', text: 'É responder o cliente no mínimo 2 horas' },
-      { id: 'b', label: 'b)', text: 'É chegar atrasado' },
-      { id: 'c', label: 'c)', text: 'É fazer ciências contábeis' },
-      { id: 'd', label: 'd)', text: 'É gerar mais resultados' },
-    ],
   },
   {
     id: 4,
@@ -159,17 +348,6 @@ export const COUNCIL_MEMBERS = [
     borderAccent: 'border-purple-400',
     glowAccent: 'shadow-purple-500/25',
     badgeBg: 'bg-purple-500/20 text-purple-300 border-purple-400/40',
-    type: 'multiple_choice',
-    greeting:
-      'Cultura também se fortalece nos momentos de integração da equipe. Vamos ver se você conhece nosso calendário interno.',
-    question:
-      'Qual o único evento interno da empresa que obrigatoriamente acontece na última semana do mês?',
-    options: [
-      { id: 'a', label: 'a)', text: 'Festa de final do ano' },
-      { id: 'b', label: 'b)', text: 'Aniversário da empresa' },
-      { id: 'c', label: 'c)', text: 'Dia da Pizza' },
-      { id: 'd', label: 'd)', text: 'Outubro Rosa' },
-    ],
   },
   {
     id: 5,
@@ -182,16 +360,6 @@ export const COUNCIL_MEMBERS = [
     borderAccent: 'border-rose-400',
     glowAccent: 'shadow-rose-500/25',
     badgeBg: 'bg-rose-500/20 text-rose-300 border-rose-400/40',
-    type: 'multiple_choice',
-    greeting:
-      'Organização começa no registro correto da nossa jornada. Qual ferramenta utilizamos para isso?',
-    question: 'Qual o nome do sistema que batemos o ponto?',
-    options: [
-      { id: 'a', label: 'a)', text: 'Epays' },
-      { id: 'b', label: 'b)', text: 'Pontofopag' },
-      { id: 'c', label: 'c)', text: 'Questor' },
-      { id: 'd', label: 'd)', text: 'Sênior' },
-    ],
   },
   {
     id: 6,
@@ -204,16 +372,6 @@ export const COUNCIL_MEMBERS = [
     borderAccent: 'border-cyan-400',
     glowAccent: 'shadow-cyan-500/25',
     badgeBg: 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40',
-    type: 'multiple_choice',
-    greeting:
-      'Eficiência operacional exige as melhores ferramentas de gestão. Quero saber sua resposta sobre tecnologia:',
-    question: 'Qual o melhor ERP do mercado?',
-    options: [
-      { id: 'a', label: 'a)', text: 'Questor' },
-      { id: 'b', label: 'b)', text: 'Epays' },
-      { id: 'c', label: 'c)', text: 'CIGAM' },
-      { id: 'd', label: 'd)', text: 'PontoMais' },
-    ],
   },
   {
     id: 7,
@@ -226,15 +384,5 @@ export const COUNCIL_MEMBERS = [
     borderAccent: 'border-emerald-400',
     glowAccent: 'shadow-emerald-500/25',
     badgeBg: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40',
-    type: 'multiple_choice',
-    greeting:
-      'Nossa postura e apresentação também comunicam a seriedade da Falavinha Next. Para fechar o Conselho:',
-    question: 'Qual o dress code correto de um colaborador da Falavinha Next?',
-    options: [
-      { id: 'a', label: 'a)', text: 'Social' },
-      { id: 'b', label: 'b)', text: 'Casual' },
-      { id: 'c', label: 'c)', text: 'Esporte fino' },
-      { id: 'd', label: 'd)', text: 'Passeio completo' },
-    ],
   },
 ]

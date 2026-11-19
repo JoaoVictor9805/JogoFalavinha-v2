@@ -15,10 +15,10 @@ export const DESAFIOS_CONSELHO = [
     corBadge: 'bg-sky-500/20 text-sky-300 border-sky-400/40',
     tipo: 'multiple_choice',
     saudacao:
-      'Vamos começar pelo básico sobre quem somos e onde estamos presentes. Mostre que conhece nossa estrutura!',
+      'Vamos começar pelo básico. Você pode até saber quem somos, mas sabe quantas unidades temos? Mostra aí que conhece a presença da Falavinha!',
     pergunta: 'Quantas unidades físicas temos?',
     mensagemAprovacao:
-      'Resposta exata! Temos 3 unidades físicas. Você tem o meu voto de aprovação.',
+      'Resposta exata! Temos 3 unidades físicas: Bacacheri, Alphaville e Araucária. Sendo assim, você tem o meu voto de aprovação.',
     opcoes: [
       { opcaoId: 'a', rotulo: 'a)', texto: '5', correta: false },
       { opcaoId: 'b', rotulo: 'b)', texto: '2', correta: false },
@@ -39,10 +39,10 @@ export const DESAFIOS_CONSELHO = [
     corBadge: 'bg-teal-500/20 text-teal-300 border-teal-400/40',
     tipo: 'multiple_choice',
     saudacao:
-      'Nossos valores guiam cada decisão no dia a dia. Quero ver se você tem os pilares da Falavinha Next na ponta da língua.',
+      'Nossos valores guiam cada decisão que tomamos no dia a dia. Será que você tem os pilares da Falavinha Next na ponta da língua?',
     pergunta: 'Quais desses é um dos nossos valores?',
     mensagemAprovacao:
-      'Excelente! Energia para transformar é um dos nossos valores essenciais. Aprovado!',
+      'Excelente! Energia para transformar é um dos nossos valores essenciais — junto com velocidade com precisão, compromisso total com o cliente, pessoas que fazem a diferença, tecnologia como alicerce e foco na solução, e não no problema. Definitivamente aprovado!',
     opcoes: [
       { opcaoId: 'a', rotulo: 'a)', texto: 'Energia para transformar', correta: true },
       { opcaoId: 'b', rotulo: 'b)', texto: 'Comunicação assertiva', correta: false },
@@ -63,10 +63,10 @@ export const DESAFIOS_CONSELHO = [
     corBadge: 'bg-amber-500/20 text-amber-300 border-amber-400/40',
     tipo: 'multiple_choice',
     saudacao:
-      'Mais do que executar tarefas, existe uma mentalidade que define o nosso time. Responda com convicção:',
+      'Mais do que executar tarefas, existe uma mentalidade que define o nosso time. Responde com convicção... eu confio que você sabe a resposta!',
     pergunta: 'O que é ser Next?',
     mensagemAprovacao:
-      'Isso mesmo! Ser Next é gerar mais resultados todos os dias. Tem a minha aprovação!',
+      'Isso mesmo! Ser Next é gerar mais resultados todos os dias. Você tem a minha aprovação — te espero na próxima reunião do Conexão Next!',
     opcoes: [
       {
         opcaoId: 'a',
@@ -92,11 +92,11 @@ export const DESAFIOS_CONSELHO = [
     corBadge: 'bg-purple-500/20 text-purple-300 border-purple-400/40',
     tipo: 'multiple_choice',
     saudacao:
-      'Cultura também se fortalece nos momentos de integração da equipe. Vamos ver se você conhece nosso calendário interno.',
+      'A cultura também se fortalece nos momentos de integração da equipe. Vamos ver se você está por dentro do nosso calendário interno!',
     pergunta:
       'Qual o único evento interno da empresa que obrigatoriamente acontece na última semana do mês?',
     mensagemAprovacao:
-      'Acertou! O Dia da Pizza é tradição garantida na última semana do mês. Aprovado!',
+      'Acertou! O Dia da Pizza é tradição garantida na última quarta-feira do mês. Aprovado, seguimos crescendo juntos!',
     opcoes: [
       { opcaoId: 'a', rotulo: 'a)', texto: 'Festa de final do ano', correta: false },
       { opcaoId: 'b', rotulo: 'b)', texto: 'Aniversário da empresa', correta: false },
@@ -117,10 +117,10 @@ export const DESAFIOS_CONSELHO = [
     corBadge: 'bg-rose-500/20 text-rose-300 border-rose-400/40',
     tipo: 'multiple_choice',
     saudacao:
-      'Organização começa no registro correto da nossa jornada. Qual ferramenta utilizamos para isso?',
+      'A organização é essencial para manter a empresa funcionando, e ela começa no registro correto da nossa jornada. Qual ferramenta utilizamos para isso?',
     pergunta: 'Qual o nome do sistema que batemos o ponto?',
     mensagemAprovacao:
-      'Pontofopag confirmado! Registro de ponto em dia é compromisso básico. Meu voto é favorável!',
+      'Pontofopag confirmado! Registro em dia é um compromisso essencial — e lembre-se de ficar sempre DE OLHO NO PONTO!! Meu voto é favorável!',
     opcoes: [
       { opcaoId: 'a', rotulo: 'a)', texto: 'Epays', correta: false },
       { opcaoId: 'b', rotulo: 'b)', texto: 'Pontofopag', correta: true },
@@ -141,10 +141,10 @@ export const DESAFIOS_CONSELHO = [
     corBadge: 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40',
     tipo: 'multiple_choice',
     saudacao:
-      'Eficiência operacional exige as melhores ferramentas de gestão. Quero saber sua resposta sobre tecnologia:',
+      'A eficiência operacional exige as melhores ferramentas de gestão. Quero saber como anda o seu conhecimento sobre a nossa tecnologia aqui dentro:',
     pergunta: 'Qual o melhor ERP do mercado?',
     mensagemAprovacao:
-      'Exato! O CIGAM é a nossa referência como o melhor ERP do mercado. Está aprovado!',
+      'Exato! O CIGAM é a nossa referência como o melhor ERP do mercado. Ele funciona como o "cérebro" da empresa, reunindo e organizando em um só lugar todos os setores. Dou minha aprovação!',
     opcoes: [
       { opcaoId: 'a', rotulo: 'a)', texto: 'Questor', correta: false },
       { opcaoId: 'b', rotulo: 'b)', texto: 'Epays', correta: false },
@@ -165,10 +165,10 @@ export const DESAFIOS_CONSELHO = [
     corBadge: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40',
     tipo: 'multiple_choice',
     saudacao:
-      'Nossa postura e apresentação também comunicam a seriedade da Falavinha Next. Para fechar o Conselho:',
+      'Mais uma lição do PEAH! Nossa postura e apresentação dentro da empresa também comunicam a seriedade da Falavinha Next — por isso a vestimenta é tão importante. Sendo assim:',
     pergunta: 'Qual o dress code correto de um colaborador da Falavinha Next?',
     mensagemAprovacao:
-      'Dress code Social confirmado! Você demonstrou conhecer a essência da Falavinha Next. Tem a minha aprovação no Conselho!',
+      'Exatamente isso! O dress code da Falavinha Next é o Social! Você tem a minha aprovação no Conselho — e lembre-se de sempre praticar o ECS!',
     opcoes: [
       { opcaoId: 'a', rotulo: 'a)', texto: 'Social', correta: true },
       { opcaoId: 'b', rotulo: 'b)', texto: 'Casual', correta: false },

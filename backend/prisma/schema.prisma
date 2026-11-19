@@ -15,7 +15,8 @@ model Jogador {
   unidade      String
   setor        String
   genero       String     @default("masculino") // "masculino" | "feminino"
-  senha        String?    // Senha simples para login (hash adicionado na Fase 7)
+  senha        String?    // Senha com hash bcrypt
+  tokenVersion Int        @default(0) @map("token_version") // Incrementado no logout para revogação real de JWT
   criadoEm     DateTime   @default(now()) @map("criado_em")
   atualizadoEm DateTime   @updatedAt @map("atualizado_em")
   partidas     Partida[]
@@ -51,6 +52,10 @@ model Partida {
   criadoEm             DateTime              @default(now()) @map("criado_em")
   atualizadoEm         DateTime              @updatedAt @map("atualizado_em")
 
+  // ATENÇÃO (Migrations futuras): existe um índice único parcial customizado no PostgreSQL
+  // ("partidas_unica_em_andamento_por_jogador" WHERE status = 'EM_ANDAMENTO'), criado na migration
+  // 20261119163500_add_unique_active_partida_index. Como o Prisma não expressa índices parciais
+  // neste arquivo, SEMPRE revise migrations geradas por `prisma migrate dev` para não incluir DROP INDEX.
   @@map("partidas")
   @@index([jogadorId])
   @@index([status])

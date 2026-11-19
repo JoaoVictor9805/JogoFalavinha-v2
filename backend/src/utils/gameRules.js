@@ -6,8 +6,9 @@ export const COMBO_TAMANHO = 3
 export const BONUS_COMBO_SEGUNDOS = 5
 export const BONUS_INVICTO_SEGUNDOS = 10
 export const TEMPO_MINIMO_OFICIAL = 1
-export const TOLERANCIA_CLOCK_SEGUNDOS = 2
-export const JANELA_SESSAO_ATIVA_SEGUNDOS = 600
+export const TEMPO_SUSPEITO_CONCLUSAO_SEGUNDOS = 5
+// Intervalo mínimo obrigatório após uma aprovação (compatível com a trava real de 2,5s da interface)
+export const COOLDOWN_APOS_APROVACAO_MS = 2000
 
 export function calcularSegundosTotais({
   segundosReais = 0,
@@ -21,35 +22,25 @@ export function calcularSegundosTotais({
 }
 
 /**
- * Calcula o tempo real confiável no servidor:
- * - Nunca retrocede abaixo do já persistido em `partida.segundosReais`.
- * - Durante uma sessão ativa (delta <= 10 min desde o último sync/largada), impede envio artificialmente baixo.
- * - Também limita saltos absurdos para cima em uma única sincronização.
+ * Calcula o tempo real 100% no servidor (anti-cheat):
+ * - Ignora completamente qualquer contagem enviada pelo cliente.
+ * - Baseia-se exclusivamente no intervalo contínuo entre `cronometroIniciadoEm` e `now`.
+ * - Nunca retrocede abaixo do `segundosReais` já persistido na partida.
  */
-export function calcularTempoSeguro({ partida, clientSeconds, now = new Date() }) {
+export function calcularTempoServidor({ partida, now = new Date() }) {
   const baseAtual = Math.max(0, Number(partida?.segundosReais) || 0)
-  const enviado =
-    typeof clientSeconds === 'number' && Number.isFinite(clientSeconds) && clientSeconds >= 0
-      ? Math.floor(clientSeconds)
-      : baseAtual
 
-  const refTimestamp = partida?.ultimoSyncEm || partida?.cronometroIniciadoEm
-  if (!refTimestamp) {
-    return Math.max(baseAtual, enviado)
+  if (!partida?.cronometroIniciadoEm) {
+    return baseAtual
   }
 
-  const deltaReal = Math.max(
-    0,
-    Math.floor((now.getTime() - new Date(refTimestamp).getTime()) / 1000)
-  )
-
-  if (deltaReal <= JANELA_SESSAO_ATIVA_SEGUNDOS) {
-    const minimoEsperado = baseAtual + Math.max(0, deltaReal - TOLERANCIA_CLOCK_SEGUNDOS)
-    const maximoPlausivel = baseAtual + deltaReal + 5
-    return Math.min(Math.max(baseAtual, enviado, minimoEsperado), maximoPlausivel)
+  const inicioMs = new Date(partida.cronometroIniciadoEm).getTime()
+  if (!Number.isFinite(inicioMs)) {
+    return baseAtual
   }
 
-  return Math.max(baseAtual, enviado)
+  const decorrido = Math.max(0, Math.floor((now.getTime() - inicioMs) / 1000))
+  return Math.max(baseAtual, decorrido)
 }
 
 /**

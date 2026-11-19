@@ -1,69 +1,91 @@
 # Escape Room Virtual Falavinha — v2 (`JogoFalavinha-v2`)
 
-Estrutura base web com **React (Vite)** no frontend e **Node.js (Express)** no backend, preparada para execução em Docker.
-
-> **Escopo atual (1ª versão):** Apenas o frontend foi implementado e está ativo no fluxo principal, consumindo diretamente o JSON estruturado de desafios (`frontend/src/data/desafios.json`). O backend Node está estruturado e pronto para a próxima etapa de desenvolvimento (persistência em banco, validação server-side e ranking centralizado).
+Aplicação web full-stack do **Conselho Next** com **React (Vite + Three.js + Tailwind CSS)** no frontend, **Node.js (Express)** no backend e **PostgreSQL (Prisma ORM)** no banco de dados, preparada para execução via Docker.
 
 ---
 
-## Estrutura do Projeto
+## Arquitetura do Projeto
 
 ```text
 JogoFalavinha-v2/
-├── docker-compose.yml            # Sobe o container do frontend (e perfil opcional para backend)
-├── backend/                      # Esqueleto Node.js + Express para próxima fase
-│   ├── Dockerfile
-│   ├── package.json
-│   └── src/
-│       ├── server.js             # Servidor HTTP com CORS e montagem de rotas /api
-│       └── routes/index.js       # Healthcheck GET /api/health + rotas planejadas
-└── frontend/                     # Aplicação React + Vite (1ª versão funcional)
-    ├── Dockerfile
-    ├── package.json
-    ├── vite.config.js            # Porta 5174 configurada para não conflitar com a v1 (5173)
+├── docker-compose.yml            # Orquestra PostgreSQL, Backend Express e Frontend Vite (ambiente dev)
+├── backend/
+│   ├── prisma/
+│   │   ├── schema.prisma         # Modelos: Jogador, Partida, Desafio, OpcaoDesafio, Tentativa, Bloqueio
+│   │   ├── migrations/           # Histórico de migrations SQL
+│   │   └── seed.js               # Seed oficial dos 7 desafios do Conselho Next
+│   ├── src/
+│   │   ├── app.js                # Express, Helmet, CORS, CSRF, Rate Limiters e Error Handlers
+│   │   ├── server.js             # Bootstrap HTTP + validação de JWT_SECRET em produção
+│   │   ├── middleware/
+│   │   │   ├── requireAuth.js    # Validação de JWT HS256 (cookie httpOnly) + tokenVersion
+│   │   │   └── csrfProtection.js # Validação de X-Requested-With e Origin em rotas de escrita
+│   │   ├── routes/               # /api/auth, /api/desafios, /api/partidas, /api/ranking
+│   │   └── utils/                # jwt.js, gameRules.js, securityLogger.js, dateFormatter.js
+│   └── tests/api.test.js         # Suíte automatizada de API, regras de negócio e segurança
+└── frontend/
+    ├── vite.config.js            # Proxy same-origin /api -> backend:3001 (porta 5174)
     └── src/
-        ├── data/desafios.json    # JSON completo autodescritivo dos desafios e regras
-        ├── utils/validacaoDesafio.js
-        ├── services/storageService.js
-        ├── components/
-        └── pages/
+        ├── services/apiService.js
+        ├── context/GameContext.jsx
+        └── components/           # Telas, Visual Novel, HUD e Labirinto 3D
 ```
 
 ---
 
-## Estrutura do JSON (`frontend/src/data/desafios.json`)
+## Controles de Segurança & Integridade Implementados
 
-O arquivo consolida todas as informações levantadas em `ESCAPE ROOM.docx` e `Levantamento de Requisitos - Escape Room Virtual Falavinha.pdf`:
-
-- **`jogo`**: título, subtítulo, descrição, regras (`cronometroContinuo`, `tentativasIlimitadas`, `exibirDicas`, `salvarProgresso`, `revelarRespostaAoErrar`), configuração do labirinto (`Johnny` → `Porta do Cliente`), campos dinâmicos do formulário de cadastro (`cadastro.campos`) e textos da tela de conclusão.
-- **`etapas` (7 desafios)**:
-  - `id`, `codigo`, `ordem`, `faseLabel`, `titulo`, `categoria`, `eixoTematico`, `tipo`, `subtipo`
-  - `exibicao`: ícone, tema de cor, flags de exibição e embaralhamento
-  - `conteudo`: `cenario`, `pergunta`, `instrucao` e configuração do `input` (`placeholder`, `inputMode`, `maxCaracteres`, `somenteNumeros`, `transformarMaiusculas`, `rotuloBotao`)
-  - `opcoes`: lista de alternativas com `id` e `texto` (quando `multipla_escolha`)
-  - `validacao`: `modo`, `respostaCorretaId` / `respostasAceitas` e regras de `normalizacao`
-  - `feedback`: mensagens para `acerto` e `erro` (sem revelar resposta nem exibir dicas)
-  - `progressoLabirinto`: rótulo do checkpoint e mensagem de avanço do Johnny
+- **Autenticação & Sessão:** senhas com hash `bcryptjs` (limite de 72 bytes UTF-8), cookie `httpOnly` + `SameSite=Strict` + `Secure` (em produção), JWT assinado com `HS256` (expiração padrão `24h`) e revogação imediata no logout via `tokenVersion` no banco.
+- **Proteção de Rotas & Privacidade:** `/api/desafios`, `/api/partidas/*`, `/api/ranking` e `/api/ranking/setores` exigem sessão autenticada; checagem anti-IDOR por propriedade da partida/histórico; ranking oculta e-mails e UUIDs de terceiros; `localStorage` não armazena dados pessoais.
+- **Anti-Cheat:**
+  - `GET /api/desafios` omite `correta` e `mensagemAprovacao` (entregue apenas após acerto validado em `POST /api/partidas/:id/validar`).
+  - Cronômetro contínuo **100% server-side** calculado a partir de `cronometroIniciadoEm` (ignora tempo enviado pelo cliente e não pausa/reseta em F5 ou re-login).
+  - Validação transacional com `SELECT ... FOR UPDATE` impedindo race condition e dupla penalidade.
+- **Proteção HTTP & Abuso:** `helmet`, limite de JSON (`50kb`), middleware CSRF (`X-Requested-With` + `Origin`), `trust proxy` restrito a proxies locais/privados (`TRUST_PROXY`), rate limiting corporativo compatível com NAT (`IP + e-mail`, limite global por e-mail e limite por sessão autenticada) e logs estruturados `[SECURITY_AUDIT]`.
 
 ---
 
-## Executando no Docker
-
-### Subir o container do frontend (1ª versão)
+## Executando em Desenvolvimento (Docker)
 
 ```bash
 docker compose up -d --build
 ```
 
-- Container criado: `jogofalavinha_v2_frontend`
-- URL: `http://localhost:5174`
+- **Frontend:** `http://localhost:5174`
+- **Backend API:** `http://localhost:3001/api/health`
+- **PostgreSQL (host):** `localhost:5433`
 
-### Subir também o esqueleto do backend Node (opcional / próxima fase)
+### Variáveis de Ambiente do Backend (`backend/.env`)
+
+Baseie-se em [backend/.env.example](file:///c:/Users/joao.oliveira/Documents/Projetos/JogoFalavinha-v2/backend/.env.example):
+
+- `PORT`: porta da API (`3001`).
+- `NODE_ENV`: `development` ou `production`.
+- `FRONTEND_ORIGIN`: origem(ns) permitida(s) pelo CORS/CSRF (ex.: `http://localhost:5174`).
+- `TRUST_PROXY`: configuração do `trust proxy` do Express (padrão: `loopback,linklocal,uniquelocal`).
+- `JWT_SECRET`: segredo de assinatura JWT (em produção, obrigatório com no mínimo 32 caracteres).
+- `JWT_EXPIRES_IN`: validade do token/cookie (padrão: `24h`).
+- `DATABASE_URL`: string de conexão PostgreSQL consumida pelo Prisma.
+
+---
+
+## Testes Automatizados e Qualidade
+
+### Backend (API, Regras de Negócio e Segurança)
 
 ```bash
-docker compose --profile backend up -d --build
+cd backend
+npx prisma migrate deploy
+npm run prisma:seed
+npm test
 ```
 
-- Container do backend: `jogofalavinha_v2_backend`
-- Healthcheck: `http://localhost:3001/api/health`
+> **Nota sobre migrations Prisma:** a tabela `partidas` possui o índice único parcial `partidas_unica_em_andamento_por_jogador` (`WHERE status = 'EM_ANDAMENTO'`), criado via SQL customizado na migration `20261119163500_add_unique_active_partida_index`. Ao gerar novas migrations com `npx prisma migrate dev`, confira o SQL gerado para garantir que o Prisma não tente remover esse índice.
 
+### Frontend (Lint e Build)
+
+```bash
+cd frontend
+npm run lint
+npm run build
+```

@@ -4,8 +4,10 @@ import cors from 'cors'
 import express from 'express'
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
 import helmet from 'helmet'
+import { createCsrfProtection, isOriginAuthorized } from './middleware/csrfProtection.js'
 import apiRouter from './routes/index.js'
 import { SESSION_COOKIE_NAME, verifySessionToken } from './utils/jwt.js'
+import { logSecurityEvent } from './utils/securityLogger.js'
 
 function getAuthenticatedUserId(req) {
   const token = req.cookies?.[SESSION_COOKIE_NAME]
@@ -23,11 +25,46 @@ function getNormalizedEmailFromBody(req) {
   return typeof email === 'string' ? email.trim().toLowerCase().slice(0, 120) : ''
 }
 
+function parseTrustProxySetting(rawValue) {
+  if (rawValue === undefined || rawValue === null || String(rawValue).trim() === '') {
+    // Padrão seguro: confia apenas em proxies na mesma máquina ou rede privada (Docker/LAN)
+    return 'loopback, linklocal, uniquelocal'
+  }
+
+  const trimmed = String(rawValue).trim().toLowerCase()
+  if (trimmed === 'false' || trimmed === '0') return false
+  if (trimmed === 'true') return true
+  if (/^\d+$/.test(trimmed)) return Number(trimmed)
+  return String(rawValue).trim()
+}
+
+function parseAllowedOrigins(rawOrigin) {
+  const source = rawOrigin || 'http://localhost:5174'
+  return source
+    .split(',')
+    .map((item) => item.trim().replace(/\/+$/, ''))
+    .filter(Boolean)
+}
+
+function createRateLimitHandler(limiterName, messagePayload) {
+  return (req, res, _next, options) => {
+    logSecurityEvent('RATE_LIMIT_EXCEEDED', {
+      limiter: limiterName,
+      ip: req.ip,
+      method: req.method,
+      path: req.originalUrl,
+      email: getNormalizedEmailFromBody(req) || undefined,
+      jogadorId: getAuthenticatedUserId(req) || undefined,
+    })
+    res.status(options.statusCode || 429).json(messagePayload)
+  }
+}
+
 export function createApp() {
   const app = express()
-  const allowedOrigin = process.env.FRONTEND_ORIGIN || 'http://localhost:5174'
+  const allowedOrigins = parseAllowedOrigins(process.env.FRONTEND_ORIGIN)
 
-  app.set('trust proxy', 1)
+  app.set('trust proxy', parseTrustProxySetting(process.env.TRUST_PROXY))
 
   app.use(
     helmet({
@@ -37,8 +74,14 @@ export function createApp() {
 
   app.use(
     cors({
-      origin: allowedOrigin,
+      origin(origin, callback) {
+        if (!origin || isOriginAuthorized(origin, allowedOrigins)) {
+          return callback(null, true)
+        }
+        return callback(null, false)
+      },
       credentials: true,
+      allowedHeaders: ['Content-Type', 'X-Requested-With'],
     })
   )
 
@@ -51,9 +94,9 @@ export function createApp() {
     max: 3000,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    message: {
+    handler: createRateLimitHandler('ip_flood', {
       erro: 'Muitas requisições simultâneas na rede. Aguarde alguns segundos e tente novamente.',
-    },
+    }),
   })
 
   // Limite individual por colaborador autenticado (não afeta colegas no mesmo IP)
@@ -64,9 +107,9 @@ export function createApp() {
     keyGenerator: (req) => `user:${getAuthenticatedUserId(req)}`,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    message: {
+    handler: createRateLimitHandler('user_session', {
       erro: 'Muitas ações em sequência. Aguarde alguns segundos e tente novamente.',
-    },
+    }),
   })
 
   // Proteção anti brute-force no login por par (IP + e-mail): 200 colegas diferentes não colidem entre si
@@ -81,9 +124,23 @@ export function createApp() {
     },
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    message: {
+    handler: createRateLimitHandler('login_ip_email', {
       erro: 'Muitas tentativas de login incorretas para este e-mail. Aguarde 15 minutos e tente novamente.',
-    },
+    }),
+  })
+
+  // Proteção secundária anti brute-force distribuído: teto global por e-mail independente do IP
+  const loginEmailGlobalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 25,
+    skipSuccessfulRequests: true,
+    skip: (req) => !getNormalizedEmailFromBody(req),
+    keyGenerator: (req) => `email:${getNormalizedEmailFromBody(req)}`,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    handler: createRateLimitHandler('login_email_global', {
+      erro: 'Esta conta atingiu o limite temporário de tentativas incorretas. Aguarde 15 minutos e tente novamente.',
+    }),
   })
 
   // Proteção no cadastro: por par (IP + e-mail) + teto folgado por IP para evento com 200+ pessoas
@@ -97,9 +154,9 @@ export function createApp() {
     },
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    message: {
+    handler: createRateLimitHandler('register_ip_email', {
       erro: 'Muitas tentativas de cadastro para este e-mail. Aguarde alguns minutos.',
-    },
+    }),
   })
 
   const registerIpCeilingLimiter = rateLimit({
@@ -107,13 +164,15 @@ export function createApp() {
     max: 500,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    message: {
+    handler: createRateLimitHandler('register_ip_ceiling', {
       erro: 'Limite temporário de novos cadastros na rede atingido. Aguarde alguns minutos.',
-    },
+    }),
   })
 
-  app.use('/api', ipFloodLimiter, userSessionLimiter)
-  app.use('/api/auth/login', loginAccountLimiter)
+  const csrfProtection = createCsrfProtection(allowedOrigins)
+
+  app.use('/api', ipFloodLimiter, csrfProtection, userSessionLimiter)
+  app.use('/api/auth/login', loginAccountLimiter, loginEmailGlobalLimiter)
   app.use('/api/auth/cadastrar', registerEmailLimiter, registerIpCeilingLimiter)
 
   app.use('/api', apiRouter)
@@ -128,10 +187,22 @@ export function createApp() {
     return next(err)
   })
 
-  app.use((req, res) => {
+  app.use((_req, res) => {
     res.status(404).json({
-      error: 'Rota não encontrada',
+      erro: 'Rota não encontrada.',
+    })
+  })
+
+  // Error handler final: garante que nenhum stack trace ou detalhe interno vaze ao cliente
+  app.use((err, req, res, _next) => {
+    console.error('[express/error]', {
+      method: req.method,
       path: req.originalUrl,
+      message: err?.message,
+    })
+    if (res.headersSent) return
+    res.status(500).json({
+      erro: 'Erro interno do servidor.',
     })
   })
 

@@ -1,20 +1,39 @@
 import { Router } from 'express'
 import prisma from '../db.js'
+import { requireAuth } from '../middleware/requireAuth.js'
 
 const router = Router()
+
+// Exige sessão autenticada para acessar as perguntas internas da empresa
+router.use(requireAuth)
 
 /**
  * GET /api/desafios
  * Retorna os 7 desafios do Conselho Next para montagem das telas do jogo.
  *
- * REGRA DE SEGURANÇA FUNDAMENTAL (Anti-Cheat):
- * O campo `correta` (gabarito) é estritamente omitido da resposta.
+ * REGRAS DE SEGURANÇA FUNDAMENTAIS (Anti-Cheat):
+ * - O campo `correta` (gabarito) é estritamente omitido da resposta.
+ * - O campo `mensagemAprovacao` também é omitido (só é entregue em POST /partidas/:id/validar após acerto).
  */
 router.get('/', async (_req, res) => {
   try {
     const desafios = await prisma.desafio.findMany({
       orderBy: { id: 'asc' },
-      include: {
+      select: {
+        id: true,
+        codigo: true,
+        nome: true,
+        cargo: true,
+        rotuloCurto: true,
+        posicaoMesa: true,
+        gradienteAvatar: true,
+        corBorda: true,
+        corBrilho: true,
+        corBadge: true,
+        tipo: true,
+        saudacao: true,
+        pergunta: true,
+        // 'mensagemAprovacao' NÃO é selecionado propositalmente (evita vazar gabarito antes do acerto)
         opcoes: {
           orderBy: { opcaoId: 'asc' },
           select: {
@@ -42,7 +61,6 @@ router.get('/', async (_req, res) => {
       type: d.tipo,
       greeting: d.saudacao,
       question: d.pergunta,
-      approvalMessage: d.mensagemAprovacao,
       options: d.opcoes.map((opt) => ({
         id: opt.opcaoId,
         label: opt.rotulo,
@@ -58,4 +76,3 @@ router.get('/', async (_req, res) => {
 })
 
 export default router
-

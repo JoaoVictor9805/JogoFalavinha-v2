@@ -253,7 +253,9 @@ function FinalRankingScreen() {
               {/* Resumo das 7 Cadeiras do Conselho */}
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 pt-1">
                 {councilList.map((m, idx) => {
-                  const st = memberProgress[m.id] || { errors: 0 }
+                  const st = memberProgress[m.id] || { errors: 0, totalErrors: 0, penaltySeconds: 0 }
+                  const totalMemberErrors = st.totalErrors ?? st.errors ?? 0
+                  const totalMemberPenalty = st.penaltySeconds ?? totalMemberErrors * 5
                   return (
                     <div
                       key={m.id}
@@ -268,14 +270,12 @@ function FinalRankingScreen() {
                       </div>
                       <div
                         className={`text-[11px] font-mono font-bold ${
-                          st.errors > 0 ? 'text-red-600' : 'text-emerald-700'
+                          totalMemberErrors > 0 ? 'text-red-600' : 'text-emerald-700'
                         }`}
                       >
-                        {st.errors === 0
+                        {totalMemberErrors === 0
                           ? 'Sem erros'
-                          : `${st.errors} ${st.errors === 1 ? 'erro' : 'erros'} (+${
-                              st.errors * 5
-                            }s)`}
+                          : `${totalMemberErrors} ${totalMemberErrors === 1 ? 'erro' : 'erros'} (+${totalMemberPenalty}s)`}
                       </div>
                     </div>
                   )
@@ -429,11 +429,11 @@ function FinalRankingScreen() {
                     paginatedGeral.map((item, idx) => {
                       const errCount = item.totalErrors || 0
                       const bonusSec = item.bonusSeconds || 0
-                      const isCurrentUser = Boolean(player?.id && item.jogadorId === player.id)
+                      const isCurrentUser = Boolean(item.isCurrentUser)
 
                       return (
                         <tr
-                          key={item.id || idx}
+                          key={item.posicao || idx}
                           className={
                             isCurrentUser
                               ? 'bg-[#F5F0E6] border-l-4 border-l-[#D99B38]'
