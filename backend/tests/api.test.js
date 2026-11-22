@@ -46,7 +46,7 @@ async function registerPlayer({
   nome,
   email,
   senha,
-  unidade = 'Londrina',
+  unidade = 'Bacacheri',
   setor = 'TI',
   genero = 'masculino',
 }) {

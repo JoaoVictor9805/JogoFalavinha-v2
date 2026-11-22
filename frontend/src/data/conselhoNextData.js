@@ -375,23 +375,31 @@ export function pickErrorDialogue({
 }
 
 export const UNITS_LIST = [
-  'Curitiba - Matriz',
-  'Londrina',
-  'Maringá',
-  'Ponta Grossa',
-  'Cascavel',
-  'Remoto / Outra',
+  'Bacacheri',
+  'Alphaville',
+  'Araucária',
 ]
 
 export const DEPARTMENTS_LIST = [
-  'Tributário',
+  'Administrativo',
+  'Altavia',
+  'CIGAM',
+  'Comercial',
+  'Condomínios',
+  'Consulta de negócios',
   'Contábil',
+  'DP',
+  'Diretoria',
   'Financeiro',
-  'Recursos Humanos',
-  'TI / Inovação',
-  'Comercial / Vendas',
-  'Operações / Suporte',
-  'Diretoria / Gestão',
+  'Fiscal',
+  'Gente & Gestão',
+  'Hubnext',
+  'Inovação',
+  'Inteligência de negócios',
+  'Marketing',
+  'Societário',
+  'TI',
+  'Tributário',
 ]
 
 export const COMIC_PANELS = [

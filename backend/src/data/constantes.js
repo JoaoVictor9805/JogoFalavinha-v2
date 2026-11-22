@@ -1,10 +1,7 @@
 export const UNIDADES_OFICIAIS = [
-  'Curitiba - Matriz',
-  'Londrina',
-  'Maringá',
-  'Ponta Grossa',
-  'Cascavel',
-  'Remoto / Outra',
+  'Bacacheri',
+  'Alphaville',
+  'Araucária',
 ]
 
 export const SETORES_OFICIAIS = [

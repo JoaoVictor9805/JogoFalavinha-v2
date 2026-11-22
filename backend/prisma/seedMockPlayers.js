@@ -7,7 +7,7 @@ const MOCK_PLAYERS = [
   {
     nome: 'Mariana Silveira',
     email: 'mariana.silveira@falavinha.com.br',
-    unidade: 'Curitiba - Matriz',
+    unidade: 'Bacacheri',
     setor: 'Contábil',
     realSeconds: 78,
     penaltySeconds: 5,
@@ -16,7 +16,7 @@ const MOCK_PLAYERS = [
   {
     nome: 'Lucas Takahashi',
     email: 'lucas.takahashi@falavinha.com.br',
-    unidade: 'Londrina',
+    unidade: 'Alphaville',
     setor: 'TI',
     realSeconds: 84,
     penaltySeconds: 0,
@@ -25,7 +25,7 @@ const MOCK_PLAYERS = [
   {
     nome: 'Beatriz Almeida',
     email: 'beatriz.almeida@falavinha.com.br',
-    unidade: 'Maringá',
+    unidade: 'Araucária',
     setor: 'Contábil',
     realSeconds: 92,
     penaltySeconds: 5,
@@ -34,7 +34,7 @@ const MOCK_PLAYERS = [
   {
     nome: 'Gabriel Santos',
     email: 'gabriel.santos@falavinha.com.br',
-    unidade: 'Curitiba - Matriz',
+    unidade: 'Bacacheri',
     setor: 'Tributário',
     realSeconds: 95,
     penaltySeconds: 10,
@@ -43,7 +43,7 @@ const MOCK_PLAYERS = [
   {
     nome: 'Camila Fernandes',
     email: 'camila.fernandes@falavinha.com.br',
-    unidade: 'Ponta Grossa',
+    unidade: 'Alphaville',
     setor: 'Gente & Gestão',
     realSeconds: 102,
     penaltySeconds: 5,
@@ -52,7 +52,7 @@ const MOCK_PLAYERS = [
   {
     nome: 'Rodrigo Medeiros',
     email: 'rodrigo.medeiros@falavinha.com.br',
-    unidade: 'Cascavel',
+    unidade: 'Araucária',
     setor: 'Contábil',
     realSeconds: 110,
     penaltySeconds: 15,
@@ -61,7 +61,7 @@ const MOCK_PLAYERS = [
   {
     nome: 'Juliana Costa',
     email: 'juliana.costa@falavinha.com.br',
-    unidade: 'Curitiba - Matriz',
+    unidade: 'Bacacheri',
     setor: 'Financeiro',
     realSeconds: 115,
     penaltySeconds: 10,
@@ -70,7 +70,7 @@ const MOCK_PLAYERS = [
   {
     nome: 'Felipe Antunes',
     email: 'felipe.antunes@falavinha.com.br',
-    unidade: 'Londrina',
+    unidade: 'Alphaville',
     setor: 'Tributário',
     realSeconds: 120,
     penaltySeconds: 5,
@@ -79,7 +79,7 @@ const MOCK_PLAYERS = [
   {
     nome: 'Aline Nogueira',
     email: 'aline.nogueira@falavinha.com.br',
-    unidade: 'Maringá',
+    unidade: 'Araucária',
     setor: 'TI',
     realSeconds: 125,
     penaltySeconds: 10,
@@ -88,7 +88,7 @@ const MOCK_PLAYERS = [
   {
     nome: 'Thiago Barcellos',
     email: 'thiago.barcellos@falavinha.com.br',
-    unidade: 'Curitiba - Matriz',
+    unidade: 'Bacacheri',
     setor: 'Contábil',
     realSeconds: 132,
     penaltySeconds: 20,
@@ -97,7 +97,7 @@ const MOCK_PLAYERS = [
   {
     nome: 'Renata Zanin',
     email: 'renata.zanin@falavinha.com.br',
-    unidade: 'Ponta Grossa',
+    unidade: 'Alphaville',
     setor: 'Tributário',
     realSeconds: 140,
     penaltySeconds: 15,
@@ -106,7 +106,7 @@ const MOCK_PLAYERS = [
   {
     nome: 'Marcelo Pires',
     email: 'marcelo.pires@falavinha.com.br',
-    unidade: 'Cascavel',
+    unidade: 'Araucária',
     setor: 'Gente & Gestão',
     realSeconds: 148,
     penaltySeconds: 10,
