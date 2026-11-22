@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 
 export const ERROR_DURATION = 3.2
+export const VICTORY_GLOW_DURATION = 3.4
 
 export function createWorldState() {
   return {
@@ -10,7 +11,17 @@ export function createWorldState() {
     errorActive: false,
     doorOpen: 0,
     successAt: -1,
+    victoryAt: -1,
   }
+}
+
+export function victoryIntensity(world, now) {
+  if (!world.victoryAt || world.victoryAt < 0) return { e: 0, glow: 0 }
+  const e = Math.max(0, (now - world.victoryAt) / 1000)
+  const attack = Math.min(1, e / 0.35)
+  const fade = e <= VICTORY_GLOW_DURATION ? 1 - (e / VICTORY_GLOW_DURATION) * 0.45 : 0.55
+  const pulse = 0.75 + 0.25 * Math.sin(e * 4.5)
+  return { e, glow: attack * fade * pulse }
 }
 
 export function errorIntensity(world, now) {

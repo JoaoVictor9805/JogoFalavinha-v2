@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import HudTimerHeader from './components/hud/HudTimerHeader'
 import ArrivalTransition from './components/screens/ArrivalTransition'
 import ComicIntroScreen from './components/screens/ComicIntroScreen'
+import ExitTransition from './components/screens/ExitTransition'
 import FinalRankingScreen from './components/screens/FinalRankingScreen'
 import RegistrationScreen from './components/screens/RegistrationScreen'
 import TribunalHubScreen from './components/screens/TribunalHubScreen'
@@ -48,6 +49,11 @@ function GameScreenRouter() {
       {screen === 'TRIBUNAL_HUB' && (
         <div key="TRIBUNAL_HUB" className="animate-screen-enter">
           <TribunalHubScreen />
+        </div>
+      )}
+      {screen === 'TRANSITION_EXIT' && (
+        <div key="TRANSITION_EXIT" className="animate-screen-enter">
+          <ExitTransition />
         </div>
       )}
       {screen === 'FINAL_RANKING' && (

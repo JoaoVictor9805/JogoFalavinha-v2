@@ -450,6 +450,36 @@ export const CEO_TRIBUNAL_BRIEFING = {
 }
 
 /**
+ * Veredito final do CEO na tela de encerramento, adaptado ao desempenho da jogada recém-concluída.
+ */
+export function getCeoFinalVerdict({ totalErrors = 0, playerName = '' } = {}) {
+  const firstName = String(playerName || '').trim().split(/\s+/)[0]
+  const greeting = firstName ? `${firstName}, ` : ''
+
+  if (totalErrors === 0) {
+    return {
+      tier: 'invicto',
+      badgeLabel: 'INVICTO · 7/7 DE PRIMEIRA',
+      speech: `${greeting}impecável! Você passou pelos 7 conselheiros sem cometer um único erro e ainda garantiu o bônus invicto. Esse é exatamente o padrão de excelência que faz a Falavinha Next girar todos os dias!`,
+    }
+  }
+
+  if (totalErrors <= 3) {
+    return {
+      tier: 'merito',
+      badgeLabel: 'APROVADO COM MÉRITO',
+      speech: `${greeting}muito bem! Mesmo sob a pressão do cronômetro, você manteve o foco, corrigiu a rota rápido e conquistou os 7 selos com segurança. Belo desempenho diante do Conselho Next!`,
+    }
+  }
+
+  return {
+    tier: 'limite',
+    badgeLabel: 'APROVADO NO LIMITE',
+    speech: `${greeting}essa bancada deu trabalho, hein? Teve susto e penalidade pelo caminho, mas o importante é que você não desistiu, ajustou o passo e garantiu os 7 selos. Da próxima vez o tempo cai ainda mais!`,
+  }
+}
+
+/**
  * Metadados puramente visuais dos 7 membros do Conselho Next (SEM perguntas, opções ou gabarito no bundle).
  * A fonte oficial e única de perguntas e alternativas é `GET /api/desafios` (rota autenticada).
  */

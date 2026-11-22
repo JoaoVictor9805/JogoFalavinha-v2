@@ -223,6 +223,10 @@
   animation: arrivalFill 3.35s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
+.animate-exit-fill {
+  animation: arrivalFill 2.75s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
 .animate-screen-enter {
   animation: screenEnter 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
 }

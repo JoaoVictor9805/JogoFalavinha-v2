@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
   Info,
   LogOut,
   Play,
+  RefreshCw,
   RotateCcw,
   Sparkles,
   Star,
@@ -21,12 +22,25 @@ import {
 import { useGame } from '../../context/gameContextInstance'
 import { getWaxSealByMemberId } from '../../data/waxSealsData'
 import { calcularAssertividade, formatarTempo } from '../../utils/validacaoDesafio'
+import CeoVerdictSection from './CeoVerdictSection'
 
 const ITEMS_PER_PAGE = 10
+const RANKING_POLL_INTERVAL_MS = 15000
+const MANUAL_REFRESH_COOLDOWN_MS = 3000
+
+function formatUpdateClock(date) {
+  if (!date) return ''
+  return date.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
 
 function FinalRankingScreen() {
   const {
     player,
+    activePartida,
     challenges,
     realSeconds,
     penaltySeconds,
@@ -48,18 +62,102 @@ function FinalRankingScreen() {
 
   // Alternância interna do Placar: 'geral' (Individual) | 'setores' (Equipes)
   const [rankingTab, setRankingTab] = useState('geral')
+  const [isRefreshingRankings, setIsRefreshingRankings] = useState(false)
+  const [refreshCooldown, setRefreshCooldown] = useState(false)
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null)
 
   const [currentPageGeral, setCurrentPageGeral] = useState(1)
   const [currentPageSetores, setCurrentPageSetores] = useState(1)
   const [currentPageTentativas, setCurrentPageTentativas] = useState(1)
 
-  // Ao montar ou atualizar a tela, garante atualização em tempo real de rankings e tentativas
+  const isRefreshingRef = useRef(false)
+  const lastFetchMsRef = useRef(0)
+  const cooldownTimerRef = useRef(null)
+
+  const executeRankingRefresh = useCallback(
+    async ({ includeHistory = false, showSpinner = false } = {}) => {
+      if (isRefreshingRef.current || !recarregarRankings) return
+      isRefreshingRef.current = true
+      if (showSpinner) {
+        setIsRefreshingRankings(true)
+      }
+      try {
+        await Promise.all([
+          recarregarRankings(),
+          includeHistory && player?.id && carregarHistoricoTentativas
+            ? carregarHistoricoTentativas()
+            : Promise.resolve(),
+        ])
+        lastFetchMsRef.current = Date.now()
+        setLastUpdatedAt(new Date())
+      } finally {
+        isRefreshingRef.current = false
+        setIsRefreshingRankings(false)
+      }
+    },
+    [carregarHistoricoTentativas, player?.id, recarregarRankings]
+  )
+
   useEffect(() => {
-    recarregarRankings?.()
-    if (player?.id && carregarHistoricoTentativas) {
-      carregarHistoricoTentativas()
+    return () => {
+      if (cooldownTimerRef.current) {
+        clearTimeout(cooldownTimerRef.current)
+      }
+    }
+  }, [])
+
+  // Carga inicial ao abrir a tela
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      recarregarRankings ? recarregarRankings() : Promise.resolve(),
+      player?.id && carregarHistoricoTentativas
+        ? carregarHistoricoTentativas()
+        : Promise.resolve(),
+    ]).then(() => {
+      if (cancelled) return
+      lastFetchMsRef.current = Date.now()
+      setLastUpdatedAt(new Date())
+    })
+    return () => {
+      cancelled = true
     }
   }, [player?.id, carregarHistoricoTentativas, recarregarRankings])
+
+  // Polling seguro a cada 15s (pausa quando a aba está oculta e atualiza ao retornar)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        executeRankingRefresh({ includeHistory: false, showSpinner: false })
+      }
+    }, RANKING_POLL_INTERVAL_MS)
+
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        Date.now() - lastFetchMsRef.current >= RANKING_POLL_INTERVAL_MS
+      ) {
+        executeRankingRefresh({ includeHistory: false, showSpinner: false })
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [executeRankingRefresh])
+
+  const handleManualRefresh = () => {
+    if (isRefreshingRankings || refreshCooldown) return
+    setRefreshCooldown(true)
+    if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current)
+    cooldownTimerRef.current = setTimeout(() => {
+      setRefreshCooldown(false)
+    }, MANUAL_REFRESH_COOLDOWN_MS)
+
+    executeRankingRefresh({ includeHistory: Boolean(player?.id), showSpinner: true })
+  }
 
   const councilList = Array.isArray(challenges) && challenges.length > 0 ? challenges : []
   const assertividadeFinal = calcularAssertividade(
@@ -68,6 +166,11 @@ function FinalRankingScreen() {
   )
   const tentativasList = playerHistory?.tentativas || []
   const melhorPartida = playerHistory?.melhorPartida || null
+
+  const currentUserRankingEntry = useMemo(
+    () => rankingHistory.find((item) => Boolean(item.isCurrentUser)) || null,
+    [rankingHistory]
+  )
 
   // Paginação: Ranking Geral
   const totalPagesGeral = Math.max(1, Math.ceil(rankingHistory.length / ITEMS_PER_PAGE))
@@ -93,6 +196,20 @@ function FinalRankingScreen() {
   return (
     <div className="min-h-screen w-full bg-[#F5F0E6] text-stone-900 pt-22 pb-16 px-4 sm:px-8 flex flex-col justify-center">
       <div className="max-w-6xl w-full mx-auto space-y-10">
+        {/* ========================================================= */}
+        {/* 0. VEREDITO FINAL DO CEO (APENAS QUANDO ACABOU DE CONCLUIR) */}
+        {/* ========================================================= */}
+        {justFinished && (
+          <CeoVerdictSection
+            playerName={player?.nome}
+            totalErrors={totalErrors}
+            activePartidaId={activePartida?.id}
+            rankingHistory={rankingHistory}
+            melhorPartida={melhorPartida}
+            tentativasCount={tentativasList.length}
+          />
+        )}
+
         {/* ========================================================= */}
         {/* 1. BLOCO SUPERIOR DE RESUMO / PAINEL DE DESEMPENHO        */}
         {/* ========================================================= */}
@@ -305,9 +422,17 @@ function FinalRankingScreen() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-emerald-600 p-4 animate-panel-rise">
-                  <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">
-                    <Star className="w-4 h-4 fill-emerald-600" />
-                    <span>Seu Recorde Pessoal Oficial</span>
+                  <div className="flex items-center justify-between gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Star className="w-4 h-4 fill-emerald-600" />
+                      <span>Seu Recorde Pessoal Oficial</span>
+                    </span>
+                    {currentUserRankingEntry && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#D99B38] text-stone-950 border border-stone-900 text-[10px] font-mono font-black shrink-0">
+                        <Trophy className="w-3 h-3" />
+                        <span>{currentUserRankingEntry.posicao}º Lugar</span>
+                      </span>
+                    )}
                   </div>
                   <div className="font-mono text-3xl sm:text-4xl font-black text-stone-900 mt-1.5">
                     {formatarTempo(melhorPartida.segundosTotais)}
@@ -385,38 +510,62 @@ function FinalRankingScreen() {
           className="space-y-4 animate-panel-rise"
           style={{ animationDelay: '220ms' }}
         >
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-l-4 border-[#D99B38] pl-4">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-l-4 border-[#D99B38] pl-4">
+            <div className="flex flex-wrap items-center gap-2.5">
               <Trophy className="w-5 h-5 text-stone-900" />
               <h2 className="text-lg font-black uppercase tracking-tight text-stone-900">
                 Placar Oficial da Conexão Next
               </h2>
+              <span
+                title="O placar atualiza automaticamente a cada 15 segundos enquanto esta aba estiver visível"
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-[#FDFBF7] border border-stone-300 text-[10px] font-mono font-bold text-stone-600"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>
+                  Ao vivo{lastUpdatedAt ? ` · ${formatUpdateClock(lastUpdatedAt)}` : ''}
+                </span>
+              </span>
             </div>
 
-            {/* Alternância de Abas: Individual vs Setores */}
-            <div className="inline-flex border-2 border-stone-900 bg-stone-200">
+            <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
-                onClick={() => setRankingTab('geral')}
-                className={`py-1.5 px-3.5 text-xs font-black uppercase tracking-[0.14em] cursor-pointer transition-all ${
-                  rankingTab === 'geral'
-                    ? 'bg-[#D99B38] text-stone-950 shadow-inner'
-                    : 'bg-[#FDFBF7] text-stone-600 hover:text-stone-900'
-                }`}
+                onClick={handleManualRefresh}
+                disabled={isRefreshingRankings || refreshCooldown}
+                title="Atualizar placar agora"
+                className="inline-flex items-center gap-1.5 py-1.5 px-3 bg-[#FDFBF7] hover:bg-[#EFE7D6] text-stone-800 border-2 border-stone-900 text-xs font-black uppercase tracking-[0.12em] shadow-[2px_2px_0px_#1C1917] active:scale-95 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
               >
-                Ranking Geral (Individual)
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${isRefreshingRankings ? 'animate-spin' : ''}`}
+                />
+                <span>{isRefreshingRankings ? 'Atualizando...' : 'Atualizar'}</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setRankingTab('setores')}
-                className={`py-1.5 px-3.5 text-xs font-black uppercase tracking-[0.14em] border-l-2 border-stone-900 cursor-pointer transition-all ${
-                  rankingTab === 'setores'
-                    ? 'bg-[#D99B38] text-stone-950 shadow-inner'
-                    : 'bg-[#FDFBF7] text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                Ranking por Equipes (Setores)
-              </button>
+
+              {/* Alternância de Abas: Individual vs Setores */}
+              <div className="inline-flex border-2 border-stone-900 bg-stone-200">
+                <button
+                  type="button"
+                  onClick={() => setRankingTab('geral')}
+                  className={`py-1.5 px-3.5 text-xs font-black uppercase tracking-[0.14em] cursor-pointer transition-all ${
+                    rankingTab === 'geral'
+                      ? 'bg-[#D99B38] text-stone-950 shadow-inner'
+                      : 'bg-[#FDFBF7] text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  Ranking Geral (Individual)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRankingTab('setores')}
+                  className={`py-1.5 px-3.5 text-xs font-black uppercase tracking-[0.14em] border-l-2 border-stone-900 cursor-pointer transition-all ${
+                    rankingTab === 'setores'
+                      ? 'bg-[#D99B38] text-stone-950 shadow-inner'
+                      : 'bg-[#FDFBF7] text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  Ranking por Equipes (Setores)
+                </button>
+              </div>
             </div>
           </div>
 
