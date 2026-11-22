@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Award, ChevronsRight, Flame, ShieldCheck, Sparkles, Star, Trophy } from 'lucide-react'
+import { Award, ChevronsRight, Clock, Flame, ShieldCheck, Sparkles, Star, Trophy } from 'lucide-react'
+import cutout4JhonnyPose1 from '../../assets/jhonny/cutout-4-jhonny-pose1.webp'
 import cutout4JhonnySuccess from '../../assets/jhonny/cutout-4-jhonny-success.webp'
 import tribunalMesaSoloImg from '../../assets/outros/tribunal-mesa-solo.webp'
 import { CEO_TRIBUNAL_BRIEFING, getCeoFinalVerdict } from '../../data/conselhoNextData'
@@ -14,13 +15,15 @@ function CeoVerdictSection({
   rankingHistory = [],
   melhorPartida = null,
   tentativasCount = 0,
+  hasCompletedRun = true,
+  justFinished = false,
 }) {
   const verdict = useMemo(
-    () => getCeoFinalVerdict({ totalErrors, playerName }),
-    [totalErrors, playerName]
+    () => getCeoFinalVerdict({ totalErrors, playerName, hasCompletedRun }),
+    [totalErrors, playerName, hasCompletedRun]
   )
 
-  const speechTriggerKey = `ceo-verdict-${activePartidaId || 'finish'}-${totalErrors}`
+  const speechTriggerKey = `ceo-verdict-${hasCompletedRun ? activePartidaId || 'done' : 'pending'}-${totalErrors}`
   const hasPlayedStampRef = useRef(false)
 
   useEffect(() => {
@@ -53,31 +56,43 @@ function CeoVerdictSection({
   )
 
   const isCurrentRunBest = Boolean(
-    melhorPartida && activePartidaId && melhorPartida.id === activePartidaId
+    hasCompletedRun && melhorPartida && activePartidaId && melhorPartida.id === activePartidaId
   )
-  const isFirstOfficialRecord = isCurrentRunBest && tentativasCount <= 1
-  const isNewPersonalRecord = isCurrentRunBest && tentativasCount > 1
+  const isFirstOfficialRecord = justFinished && isCurrentRunBest && tentativasCount <= 1
+  const isNewPersonalRecord = justFinished && isCurrentRunBest && tentativasCount > 1
 
   const tierStyles =
-    verdict.tier === 'invicto'
+    verdict.tier === 'pendente'
       ? {
-          badge: 'bg-emerald-600 text-white border-stone-900',
-          cardAccent: 'border-l-emerald-600',
-          Icon: Flame,
+          badge: 'bg-stone-800 text-[#D99B38] border-stone-900',
+          cardAccent: 'border-l-stone-800',
+          Icon: Clock,
         }
-      : verdict.tier === 'merito'
+      : verdict.tier === 'invicto'
         ? {
-            badge: 'bg-[#D99B38] text-stone-950 border-stone-900',
-            cardAccent: 'border-l-[#D99B38]',
-            Icon: Award,
+            badge: 'bg-emerald-600 text-white border-stone-900',
+            cardAccent: 'border-l-emerald-600',
+            Icon: Flame,
           }
-        : {
-            badge: 'bg-amber-600 text-white border-stone-900',
-            cardAccent: 'border-l-amber-600',
-            Icon: ShieldCheck,
-          }
+        : verdict.tier === 'merito'
+          ? {
+              badge: 'bg-[#D99B38] text-stone-950 border-stone-900',
+              cardAccent: 'border-l-[#D99B38]',
+              Icon: Award,
+            }
+          : {
+              badge: 'bg-amber-600 text-white border-stone-900',
+              cardAccent: 'border-l-amber-600',
+              Icon: ShieldCheck,
+            }
 
   const TierIcon = tierStyles.Icon
+  const ceoPortrait = hasCompletedRun ? cutout4JhonnySuccess : cutout4JhonnyPose1
+  const headerTagLabel = justFinished
+    ? 'Veredito Final'
+    : hasCompletedRun
+      ? 'Último Veredito'
+      : 'Convocação do Conselho'
 
   return (
     <section
@@ -89,7 +104,7 @@ function CeoVerdictSection({
         <div className="lg:col-span-5 flex flex-col items-center justify-end order-2 lg:order-1">
           <div className="relative z-10 inline-flex justify-center items-end origin-bottom select-none pointer-events-none">
             <img
-              src={cutout4JhonnySuccess}
+              src={ceoPortrait}
               alt={CEO_TRIBUNAL_BRIEFING.name}
               draggable={false}
               className={`h-[195px] sm:h-[235px] lg:h-[250px] w-auto object-contain object-bottom saturate-[1.06] contrast-[1.03] ${
@@ -131,7 +146,7 @@ function CeoVerdictSection({
             <div className="inline-flex items-center gap-2 px-4 py-1 text-xs font-black uppercase tracking-widest border-2 border-b-0 border-stone-900 bg-[#D99B38] text-stone-950 ml-3 relative z-10">
               <span>{CEO_TRIBUNAL_BRIEFING.name}</span>
               <span className="opacity-65">·</span>
-              <span>Veredito Final</span>
+              <span>{headerTagLabel}</span>
             </div>
 
             <div
@@ -208,14 +223,20 @@ function CeoVerdictSection({
                       Posição no Ranking Geral
                     </div>
                     <div className="font-mono text-base sm:text-lg font-black text-stone-900 leading-tight">
-                      {userRankingEntry
-                        ? `${userRankingEntry.posicao}º Lugar`
-                        : 'Computando...'}
-                      {rankingHistory.length > 0 && userRankingEntry && (
-                        <span className="ml-1.5 text-xs font-semibold text-stone-500">
-                          de {rankingHistory.length}{' '}
-                          {rankingHistory.length === 1 ? 'participante' : 'participantes'}
-                        </span>
+                      {!hasCompletedRun ? (
+                        <span className="text-sm text-stone-600">Ainda não ranqueado</span>
+                      ) : userRankingEntry ? (
+                        <>
+                          {userRankingEntry.posicao}º Lugar
+                          {rankingHistory.length > 0 && (
+                            <span className="ml-1.5 text-xs font-semibold text-stone-500">
+                              de {rankingHistory.length}{' '}
+                              {rankingHistory.length === 1 ? 'participante' : 'participantes'}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        'Computando...'
                       )}
                     </div>
                   </div>
@@ -230,15 +251,21 @@ function CeoVerdictSection({
                       {isCurrentRunBest ? 'Seu Melhor Tempo' : 'Recorde Pessoal Atual'}
                     </div>
                     <div className="font-mono text-base sm:text-lg font-black text-emerald-700 leading-tight">
-                      {melhorPartida
-                        ? formatarTempo(melhorPartida.segundosTotais)
-                        : userRankingEntry
-                          ? formatarTempo(userRankingEntry.totalSeconds)
-                          : '—'}
-                      {!isCurrentRunBest && melhorPartida && (
-                        <span className="ml-1.5 text-[11px] font-semibold text-stone-500">
-                          (mantido)
-                        </span>
+                      {!hasCompletedRun ? (
+                        <span className="text-sm text-stone-500">Sem registro</span>
+                      ) : melhorPartida ? (
+                        <>
+                          {formatarTempo(melhorPartida.segundosTotais)}
+                          {!isCurrentRunBest && (
+                            <span className="ml-1.5 text-[11px] font-semibold text-stone-500">
+                              (mantido)
+                            </span>
+                          )}
+                        </>
+                      ) : userRankingEntry ? (
+                        formatarTempo(userRankingEntry.totalSeconds)
+                      ) : (
+                        '—'
                       )}
                     </div>
                   </div>

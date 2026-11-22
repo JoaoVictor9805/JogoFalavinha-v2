@@ -450,11 +450,24 @@ export const CEO_TRIBUNAL_BRIEFING = {
 }
 
 /**
- * Veredito final do CEO na tela de encerramento, adaptado ao desempenho da jogada recém-concluída.
+ * Veredito final do CEO na tela de encerramento, adaptado ao desempenho da jogada
+ * (ou convite inicial caso o colaborador ainda não tenha concluído nenhuma partida).
  */
-export function getCeoFinalVerdict({ totalErrors = 0, playerName = '' } = {}) {
+export function getCeoFinalVerdict({
+  totalErrors = 0,
+  playerName = '',
+  hasCompletedRun = true,
+} = {}) {
   const firstName = String(playerName || '').trim().split(/\s+/)[0]
   const greeting = firstName ? `${firstName}, ` : ''
+
+  if (!hasCompletedRun) {
+    return {
+      tier: 'pendente',
+      badgeLabel: 'AGUARDANDO PRIMEIRA PROVA',
+      speech: `${greeting}o Conselho Next está reunido e aguardando a sua avaliação. Você ainda não concluiu nenhuma tentativa oficial — clique em "Iniciar Desafio" quando estiver pronto para encarar a bancada!`,
+    }
+  }
 
   if (totalErrors === 0) {
     return {
