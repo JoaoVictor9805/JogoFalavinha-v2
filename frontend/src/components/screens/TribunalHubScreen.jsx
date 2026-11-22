@@ -1,27 +1,14 @@
 import { useEffect, useState } from 'react'
 import { AlertCircle, CheckCircle2, Lock } from 'lucide-react'
-import card1Andre from '../../assets/andre/card-1-andre.jpg'
-import card2Ramon from '../../assets/ramon/card-2-ramon.jpg'
-import card3Vanessa from '../../assets/vanessa/card-3-vanessa.jpg'
-import card4Jhonny from '../../assets/jhonny/card-4-jhonny.jpg'
-import card5Juarez from '../../assets/juarez/card-5-juarez.jpg'
-import card6Ricardo from '../../assets/ricardo/card-6-ricardo.jpg'
-import card7Ed from '../../assets/ed/card-7-ed.jpg'
-import tribunalMesaImg from '../../assets/outros/tribunal-mesa.webp'
+import {
+  MEMBER_CARD_IMAGES,
+  TRIBUNAL_MESA_IMG as tribunalMesaImg,
+} from '../../data/councilAssets'
 import { COUNCIL_POP_STAGGER_MS } from '../../context/GameContext'
 import { useGame } from '../../context/gameContextInstance'
 import { getWaxSealByMemberId } from '../../data/waxSealsData'
+import { prefetchTribunalAssets } from '../../utils/assetPrefetch'
 import VisualNovelOverlay from '../vn/VisualNovelOverlay'
-
-const MEMBER_CARD_IMAGES = {
-  1: card1Andre,
-  2: card2Ramon,
-  3: card3Vanessa,
-  4: card4Jhonny,
-  5: card5Juarez,
-  6: card6Ricardo,
-  7: card7Ed,
-}
 
 function TribunalHubScreen() {
   const {
@@ -58,6 +45,10 @@ function TribunalHubScreen() {
       setRecentlyStampedId(null)
     }
   }
+
+  useEffect(() => {
+    prefetchTribunalAssets()
+  }, [])
 
   useEffect(() => {
     if (!hasAnyLocks) return undefined

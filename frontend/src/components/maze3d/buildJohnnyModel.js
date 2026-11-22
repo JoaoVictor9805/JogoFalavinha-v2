@@ -351,6 +351,39 @@ export function buildJohnnyModel(initialStep = 0, { skipDrop = false, gender = '
     head.rotation.z = Math.sin(t * 0.8) * 0.06 * idle
   }
 
-  return { group: root, update }
+  function reset(step = 0, { skipDrop = true } = {}) {
+    const targetS = routeDistanceForStep(step, route.cum)
+    const total = route.cum[route.cum.length - 1]
+    const isAtEnd = targetS >= total - 0.01
+    const ahead = pointAt(targetS + 0.05, route.pts, route.cum)
+
+    st.s = targetS
+    st.vel = 0
+    st.phase = 0
+    st.heading = skipDrop
+      ? isAtEnd
+        ? -Math.PI / 2
+        : Math.atan2(ahead.dx, ahead.dz)
+      : Math.PI / 2
+    st.stepAcc = 0
+    st.doneTimer = 0
+    st.completed = isAtEnd
+    st.cheer = -1
+    st.wasMoving = false
+    st.intro = skipDrop ? 5 : 0
+
+    const p = pointAt(st.s, route.pts, route.cum)
+    root.position.set(p.x, skipDrop ? 0 : 3, p.z)
+    root.rotation.y = st.heading
+    root.visible = skipDrop
+    body.position.y = 0
+    legL.rotation.x = 0
+    legR.rotation.x = 0
+    armL.rotation.set(0, 0, 0)
+    armR.rotation.set(0, 0, 0)
+    head.rotation.set(0, 0, 0)
+  }
+
+  return { group: root, update, reset }
 }
 

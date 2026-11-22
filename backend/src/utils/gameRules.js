@@ -9,10 +9,13 @@ export const TEMPO_MINIMO_OFICIAL = 1
 export const TEMPO_SUSPEITO_CONCLUSAO_SEGUNDOS = 5
 // Intervalo mínimo obrigatório após uma aprovação (compatível com o mínimo real de 2,5s da interface)
 export const COOLDOWN_APOS_APROVACAO_MS = 2000
-// Limites determinísticos da pausa server-side durante a fala final de aprovação
+// Limites determinísticos da pausa server-side durante a fala final de aprovação + modal 3D de avanço
 export const MINIMO_LEITURA_APROVACAO_MS = 2500
 export const RESPIRO_POS_FALA_APROVACAO_MS = 1000
 export const MAXIMO_LEITURA_APROVACAO_MS = 12000
+export const FOLGA_MODAL_AVANCO_3D_MS = 4500
+export const MAXIMO_PAUSA_APROVACAO_TOTAL_MS =
+  MAXIMO_LEITURA_APROVACAO_MS + FOLGA_MODAL_AVANCO_3D_MS
 
 export function calcularSegundosTotais({
   segundosReais = 0,
@@ -56,6 +59,15 @@ export function estimarDuracaoLeituraAprovacaoMs(texto, speed = 22) {
     MAXIMO_LEITURA_APROVACAO_MS,
     Math.max(MINIMO_LEITURA_APROVACAO_MS, totalEstimado)
   )
+}
+
+/**
+ * Calcula o teto da pausa de aprovação somando uma folga determinística para
+ * a animação do modal 3D de avanço no labirinto (mantendo teto anti-cheat).
+ */
+export function calcularLimitePausaAprovacaoMs(duracaoLeituraMs = MINIMO_LEITURA_APROVACAO_MS) {
+  const baseLeitura = Math.max(MINIMO_LEITURA_APROVACAO_MS, Number(duracaoLeituraMs) || 0)
+  return Math.min(MAXIMO_PAUSA_APROVACAO_TOTAL_MS, baseLeitura + FOLGA_MODAL_AVANCO_3D_MS)
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   TEMPO_SUSPEITO_CONCLUSAO_SEGUNDOS,
   avaliarBonusAcerto,
   avaliarResultadoErro,
+  calcularLimitePausaAprovacaoMs,
   calcularSegundosTotais,
   calcularTempoServidor,
   consolidarPausaServidor,
@@ -609,6 +610,7 @@ router.post('/:id/validar', async (req, res) => {
           evitarCruzada: evitarCruzadaFlag,
         })
         const duracaoLeituraMs = estimarDuracaoLeituraAprovacaoMs(resultadoMensagem.mensagem)
+        const pausaMaximaMs = jogoConcluido ? 0 : calcularLimitePausaAprovacaoMs(duracaoLeituraMs)
 
         const novoSegundosBonus = partida.segundosBonus + bonus.bonusTotalAplicado
         const novoSegundosTotais = calcularSegundosTotais({
@@ -627,7 +629,7 @@ router.post('/:id/validar', async (req, res) => {
           totalCombos: partida.totalCombos + bonus.incrementTotalCombos,
           pausaMsAcumulados: pausaConsolidada.pausaMsAcumulados,
           pausadoDesde: jogoConcluido ? null : now,
-          pausaMaximaAte: jogoConcluido ? null : new Date(now.getTime() + duracaoLeituraMs),
+          pausaMaximaAte: jogoConcluido ? null : new Date(now.getTime() + pausaMaximaMs),
           ultimoSyncEm: now,
         }
 
