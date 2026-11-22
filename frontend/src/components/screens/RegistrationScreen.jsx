@@ -135,7 +135,7 @@ function RegistrationScreen() {
         {/* Cabeçalho */}
         <div className="border-l-4 border-[#D99B38] pl-4 mb-6">
           <div className="text-[11px] font-black uppercase tracking-[0.2em] text-[#B87D1E]">
-            Escape Room Virtual Falavinha
+            Questionário Virtual Falavinha
           </div>
           <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-stone-900">
             {activeTab === 'cadastro' ? 'Credenciamento Oficial' : 'Acesso ao Desafio'}
@@ -152,22 +152,20 @@ function RegistrationScreen() {
           <button
             type="button"
             onClick={() => handleTabSwitch('cadastro')}
-            className={`flex-1 py-2.5 px-3 text-xs font-black uppercase tracking-[0.14em] transition-all cursor-pointer ${
-              activeTab === 'cadastro'
+            className={`flex-1 py-2.5 px-3 text-xs font-black uppercase tracking-[0.14em] transition-all cursor-pointer ${activeTab === 'cadastro'
                 ? 'bg-[#D99B38] text-stone-950 shadow-inner'
                 : 'bg-[#FDFBF7] text-stone-600 hover:text-stone-900'
-            }`}
+              }`}
           >
             Novo Cadastro
           </button>
           <button
             type="button"
             onClick={() => handleTabSwitch('login')}
-            className={`flex-1 py-2.5 px-3 text-xs font-black uppercase tracking-[0.14em] border-l-2 border-stone-900 transition-all cursor-pointer ${
-              activeTab === 'login'
+            className={`flex-1 py-2.5 px-3 text-xs font-black uppercase tracking-[0.14em] border-l-2 border-stone-900 transition-all cursor-pointer ${activeTab === 'login'
                 ? 'bg-[#D99B38] text-stone-950 shadow-inner'
                 : 'bg-[#FDFBF7] text-stone-600 hover:text-stone-900'
-            }`}
+              }`}
           >
             Já sou Cadastrado
           </button>
@@ -301,13 +299,11 @@ function RegistrationScreen() {
                       onClick={() =>
                         setRegisterForm((prev) => ({ ...prev, genero: opt.value }))
                       }
-                      className={`py-2.5 px-3 text-xs font-black uppercase tracking-[0.14em] transition-all cursor-pointer disabled:opacity-50 ${
-                        idx > 0 ? 'border-l-2 border-stone-900' : ''
-                      } ${
-                        isSelected
+                      className={`py-2.5 px-3 text-xs font-black uppercase tracking-[0.14em] transition-all cursor-pointer disabled:opacity-50 ${idx > 0 ? 'border-l-2 border-stone-900' : ''
+                        } ${isSelected
                           ? 'bg-[#D99B38] text-stone-950 shadow-inner'
                           : 'bg-white text-stone-600 hover:bg-[#F5F0E6] hover:text-stone-900'
-                      }`}
+                        }`}
                     >
                       {opt.label}
                     </button>
