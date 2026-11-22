@@ -1,12 +1,24 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Award, ChevronsRight, Clock, Flame, ShieldCheck, Sparkles, Star, Trophy } from 'lucide-react'
 import cutout4JhonnyPose1 from '../../assets/jhonny/cutout-4-jhonny-pose1.webp'
+import cutout4JhonnyPose2 from '../../assets/jhonny/cutout-4-jhonny-pose2.webp'
+import cutout4JhonnyPose3 from '../../assets/jhonny/cutout-4-jhonny-pose3.webp'
 import cutout4JhonnySuccess from '../../assets/jhonny/cutout-4-jhonny-success.webp'
 import tribunalMesaSoloImg from '../../assets/outros/tribunal-mesa-solo.webp'
 import { CEO_TRIBUNAL_BRIEFING, getCeoFinalVerdict } from '../../data/conselhoNextData'
 import { useTypewriter } from '../../hooks/useTypewriter'
 import { playDialogueBlipSound, playWaxSealStampSound } from '../../utils/soundEffects'
 import { formatarTempo } from '../../utils/validacaoDesafio'
+
+const POSE_SWITCH_TYPING_MS = 1100
+const POSE_SWITCH_IDLE_MS = 2400
+const CEO_IDLE_POSES = [cutout4JhonnyPose1, cutout4JhonnyPose2, cutout4JhonnyPose3]
+const CEO_COMPLETED_POSES = [
+  cutout4JhonnySuccess,
+  cutout4JhonnyPose1,
+  cutout4JhonnyPose2,
+  cutout4JhonnyPose3,
+]
 
 function CeoVerdictSection({
   playerName,
@@ -18,6 +30,11 @@ function CeoVerdictSection({
   hasCompletedRun = true,
   justFinished = false,
 }) {
+  const [poseIndex, setPoseIndex] = useState(0)
+  const [posePulseKey, setPosePulseKey] = useState(0)
+  const [isFlipped, setIsFlipped] = useState(false)
+  const posesOnCurrentSideRef = useRef(0)
+
   const verdict = useMemo(
     () => getCeoFinalVerdict({ totalErrors, playerName, hasCompletedRun }),
     [totalErrors, playerName, hasCompletedRun]
@@ -41,6 +58,33 @@ function CeoVerdictSection({
     triggerKey: speechTriggerKey,
     onCharacter: handleTypeChar,
   })
+
+  const ceoPoses = hasCompletedRun ? CEO_COMPLETED_POSES : CEO_IDLE_POSES
+  const activePoseCount = ceoPoses.length
+  const poseIntervalMs = isTyping ? POSE_SWITCH_TYPING_MS : POSE_SWITCH_IDLE_MS
+
+  useEffect(() => {
+    if (activePoseCount <= 1) return undefined
+
+    const timer = setInterval(() => {
+      setPoseIndex((prev) => {
+        const step = activePoseCount > 2 && Math.random() < 0.3 ? 2 : 1
+        return (prev + step) % activePoseCount
+      })
+      setPosePulseKey((prev) => prev + 1)
+
+      posesOnCurrentSideRef.current += 1
+      const minPosesBeforeFlip = isTyping ? 3 : 2
+      const flipChance = isTyping ? 0.35 : 0.42
+
+      if (posesOnCurrentSideRef.current >= minPosesBeforeFlip && Math.random() < flipChance) {
+        setIsFlipped((prev) => !prev)
+        posesOnCurrentSideRef.current = 0
+      }
+    }, poseIntervalMs)
+
+    return () => clearInterval(timer)
+  }, [activePoseCount, poseIntervalMs, isTyping])
 
   const verdictRevealed = !isTyping
 
@@ -87,7 +131,9 @@ function CeoVerdictSection({
             }
 
   const TierIcon = tierStyles.Icon
-  const ceoPortrait = hasCompletedRun ? cutout4JhonnySuccess : cutout4JhonnyPose1
+  const activePoseIdx = poseIndex % ceoPoses.length
+  const activePoseSrc = ceoPoses[activePoseIdx]
+  const effectiveFlipped = activePoseSrc === cutout4JhonnySuccess ? false : isFlipped
   const headerTagLabel = justFinished
     ? 'Veredito Final'
     : hasCompletedRun
@@ -102,17 +148,39 @@ function CeoVerdictSection({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-end">
         {/* Esquerda: CEO na Bancada do Tribunal */}
         <div className="lg:col-span-5 flex flex-col items-center justify-end order-2 lg:order-1">
-          <div className="relative z-10 inline-flex justify-center items-end origin-bottom select-none pointer-events-none">
-            <img
-              src={ceoPortrait}
-              alt={CEO_TRIBUNAL_BRIEFING.name}
-              draggable={false}
-              className={`h-[195px] sm:h-[235px] lg:h-[250px] w-auto object-contain object-bottom saturate-[1.06] contrast-[1.03] ${
-                isSpeaking
-                  ? 'animate-vn-talk drop-shadow-[0_14px_24px_rgba(28,25,23,0.22)]'
-                  : 'animate-vn-idle drop-shadow-[0_14px_24px_rgba(28,25,23,0.16)]'
-              }`}
-            />
+          <div
+            className={`relative z-10 inline-flex justify-center items-end origin-bottom select-none pointer-events-none ${
+              isSpeaking
+                ? 'animate-vn-talk drop-shadow-[0_14px_24px_rgba(28,25,23,0.22)]'
+                : 'animate-vn-idle drop-shadow-[0_14px_24px_rgba(28,25,23,0.16)]'
+            }`}
+          >
+            <div
+              key={posePulseKey}
+              className="animate-vn-pose-pop origin-bottom inline-flex justify-center items-end"
+            >
+              <div
+                className={`relative origin-center transition-transform duration-150 ${
+                  effectiveFlipped ? '-scale-x-100' : 'scale-x-100'
+                }`}
+              >
+                {ceoPoses.map((poseSrc, idx) => {
+                  const isActive = idx === activePoseIdx
+                  return (
+                    <img
+                      key={poseSrc}
+                      src={poseSrc}
+                      alt={idx === 0 ? CEO_TRIBUNAL_BRIEFING.name : ''}
+                      aria-hidden={idx > 0}
+                      draggable={false}
+                      className={`h-[195px] sm:h-[235px] lg:h-[250px] w-auto object-contain object-bottom saturate-[1.06] contrast-[1.03] ${
+                        idx === 0 ? 'relative' : 'absolute inset-0 w-full h-full'
+                      } ${isActive ? 'opacity-100' : 'opacity-0'}`}
+                    />
+                  )
+                })}
+              </div>
+            </div>
           </div>
 
           <div className="relative z-20 -mt-[40px] sm:-mt-[48px] w-[260px] sm:w-[320px] max-w-full select-none pointer-events-none">
