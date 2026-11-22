@@ -130,6 +130,14 @@ function FinalRankingScreen() {
   )
   const tentativasList = playerHistory?.tentativas || []
   const melhorPartida = playerHistory?.melhorPartida || null
+  const latestAttempt = tentativasList[0] || null
+  const hasCompletedRun = Boolean(justFinished || melhorPartida || latestAttempt)
+  const effectiveTotalErrors = justFinished
+    ? totalErrors
+    : (latestAttempt?.totalErros ?? melhorPartida?.totalErros ?? 0)
+  const effectivePartidaId = justFinished
+    ? activePartida?.id
+    : (latestAttempt?.id ?? melhorPartida?.id ?? null)
 
   const currentUserRankingEntry = useMemo(
     () => rankingHistory.find((item) => Boolean(item.isCurrentUser)) || null,
@@ -161,18 +169,18 @@ function FinalRankingScreen() {
     <div className="min-h-screen w-full bg-[#F5F0E6] text-stone-900 pt-22 pb-16 px-4 sm:px-8 flex flex-col justify-center">
       <div className="max-w-6xl w-full mx-auto space-y-10">
         {/* ========================================================= */}
-        {/* 0. VEREDITO FINAL DO CEO (APENAS QUANDO ACABOU DE CONCLUIR) */}
+        {/* 0. VEREDITO DO CEO (EXIBIDO SEMPRE NO TOPO DA TELA FINAL) */}
         {/* ========================================================= */}
-        {justFinished && (
-          <CeoVerdictSection
-            playerName={player?.nome}
-            totalErrors={totalErrors}
-            activePartidaId={activePartida?.id}
-            rankingHistory={rankingHistory}
-            melhorPartida={melhorPartida}
-            tentativasCount={tentativasList.length}
-          />
-        )}
+        <CeoVerdictSection
+          playerName={player?.nome}
+          totalErrors={effectiveTotalErrors}
+          activePartidaId={effectivePartidaId}
+          rankingHistory={rankingHistory}
+          melhorPartida={melhorPartida}
+          tentativasCount={tentativasList.length}
+          hasCompletedRun={hasCompletedRun}
+          justFinished={justFinished}
+        />
 
         {/* ========================================================= */}
         {/* 1. BLOCO SUPERIOR DE RESUMO / PAINEL DE DESEMPENHO        */}
