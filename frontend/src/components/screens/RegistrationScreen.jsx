@@ -135,7 +135,7 @@ function RegistrationScreen() {
         {/* Cabeçalho */}
         <div className="border-l-4 border-[#D99B38] pl-4 mb-6">
           <div className="text-[11px] font-black uppercase tracking-[0.2em] text-[#B87D1E]">
-            Escape Room Virtual Falavinha
+            Questionário Virtual Falavinha
           </div>
           <h1 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-stone-900">
             {activeTab === 'cadastro' ? 'Credenciamento Oficial' : 'Acesso ao Desafio'}
