@@ -122,6 +122,35 @@ async function montarHistoricoJogador(jogadorId) {
     startedAt: formatarDataBrasilia(p.iniciadoEm),
   }))
 
+  const ultimaNumerada =
+    tentativasNumeradas.length > 0
+      ? tentativasNumeradas[tentativasNumeradas.length - 1]
+      : null
+
+  let detalhesUltimaPartida = {}
+  if (ultimaNumerada) {
+    const errosUltimaPartida = await prisma.tentativa.findMany({
+      where: {
+        partidaId: ultimaNumerada.id,
+        acertou: false,
+      },
+      select: {
+        desafioId: true,
+        penalidadeAplicada: true,
+      },
+    })
+
+    detalhesUltimaPartida = errosUltimaPartida.reduce((acc, item) => {
+      const id = item.desafioId
+      if (!acc[id]) {
+        acc[id] = { totalErrors: 0, penaltySeconds: 0 }
+      }
+      acc[id].totalErrors += 1
+      acc[id].penaltySeconds += Number(item.penalidadeAplicada) || 5
+      return acc
+    }, {})
+  }
+
   return {
     jogador,
     totalTentativas: partidasConcluidas.length,
@@ -129,6 +158,12 @@ async function montarHistoricoJogador(jogadorId) {
       ? {
           ...melhorPartida,
           invicto: melhorPartida.totalErros === 0,
+        }
+      : null,
+    ultimaPartida: ultimaNumerada
+      ? {
+          ...ultimaNumerada,
+          detalhesPorMembro: detalhesUltimaPartida,
         }
       : null,
     tentativas: [...tentativasNumeradas].reverse(),
