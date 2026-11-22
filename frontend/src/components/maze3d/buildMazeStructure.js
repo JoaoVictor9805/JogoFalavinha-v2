@@ -20,6 +20,7 @@ import {
   signTexture,
   woodTextures,
 } from './textures'
+import { errorIntensity } from './world'
 
 function createPartition({ x, z, alongX, length = CELL, fabricMat, trimMat }) {
   const [w, d] = alongX ? [length + WALL_T, WALL_T] : [WALL_T, length + WALL_T]
@@ -65,6 +66,8 @@ export function buildMazeStructure(world, { skipRise = false } = {}) {
     bumpScale: 0.8,
     roughness: 0.95,
     color: '#c9d3db',
+    emissive: new THREE.Color('#dc2626'),
+    emissiveIntensity: 0,
   })
   const trimMat = new THREE.MeshStandardMaterial({
     color: '#c8ccd0',
@@ -97,15 +100,15 @@ export function buildMazeStructure(world, { skipRise = false } = {}) {
   root.add(slab)
 
   // Carpete do labirinto
-  const carpetMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(WIDTH, DEPTH),
-    new THREE.MeshStandardMaterial({
-      map: carpet.map,
-      bumpMap: carpet.bumpMap,
-      bumpScale: 1.2,
-      roughness: 1,
-    })
-  )
+  const carpetMat = new THREE.MeshStandardMaterial({
+    map: carpet.map,
+    bumpMap: carpet.bumpMap,
+    bumpScale: 1.2,
+    roughness: 1,
+    emissive: new THREE.Color('#b91c1c'),
+    emissiveIntensity: 0,
+  })
+  const carpetMesh = new THREE.Mesh(new THREE.PlaneGeometry(WIDTH, DEPTH), carpetMat)
   carpetMesh.rotation.x = -Math.PI / 2
   carpetMesh.position.set(0, 0.002, 0)
   carpetMesh.receiveShadow = true
@@ -328,7 +331,7 @@ export function buildMazeStructure(world, { skipRise = false } = {}) {
 
   root.add(doorGroup)
 
-  function update(elapsedSec, dt) {
+  function update(elapsedSec, dt, nowMs = performance.now()) {
     risers.forEach((item) => {
       if (item.done) return
       const k = Math.min(1, Math.max(0, (elapsedSec - item.delay) / 0.55))
@@ -338,6 +341,10 @@ export function buildMazeStructure(world, { skipRise = false } = {}) {
       item.group.scale.y = Math.max(0.001, e)
       if (k >= 1) item.done = true
     })
+
+    const { flash } = errorIntensity(world, nowMs)
+    fabricMat.emissiveIntensity = flash * 0.62
+    carpetMat.emissiveIntensity = flash * 0.38
 
     clientSignMat.emissiveIntensity = 0.25 + 0.2 * Math.sin(elapsedSec * 2.2)
 

@@ -111,6 +111,13 @@ export const apiService = {
     })
   },
 
+  async retomarCronometro(partidaId) {
+    return request(`/partidas/${partidaId}/retomar-cronometro`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    })
+  },
+
   // Rankings
   async obterRankingGeral() {
     return request('/ranking')

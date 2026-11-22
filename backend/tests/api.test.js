@@ -7,10 +7,13 @@ import {
   avaliarResultadoErro,
   calcularSegundosTotais,
   calcularTempoServidor,
+  consolidarPausaServidor,
+  estimarDuracaoLeituraAprovacaoMs,
 } from '../src/utils/gameRules.js'
 import {
   CONSELHEIROS_REFERENCIA,
   formatarFalaComReferencia,
+  gerarMensagemAprovacao,
   selecionarMensagemAprovacao,
 } from '../src/utils/dialogosConselho.js'
 import { maskEmail } from '../src/utils/securityLogger.js'
@@ -443,7 +446,7 @@ describe('Escape Room Falavinha v2 — API, Regras de Negócio & Segurança', ()
     assert.equal(okNext.status, 200)
   })
 
-  test('Ciclo de erros (+5s, +5s, +10s), bloqueio de 10s, reset e anti-dupla-penalidade', async () => {
+  test('Ciclo de erros (+5s, +5s, +10s), bloqueio de 20s, reset e anti-dupla-penalidade', async () => {
     const user = await registerPlayer({
       nome: 'Erro User',
       email: makeTestEmail('erros'),
@@ -490,7 +493,7 @@ describe('Escape Room Falavinha v2 — API, Regras de Negócio & Segurança', ()
     assert.equal(d2.penalidade, 5)
     assert.equal(d2.reprovado, false)
 
-    // 3º erro (+10s, total +20s, bloqueio 10s e reset das opções)
+    // 3º erro (+10s, total +20s, bloqueio 20s e reset das opções)
     const e3 = await fetch(`${baseUrl}/partidas/${partida.id}/validar`, {
       method: 'POST',
       headers: jsonHeaders({ Cookie: user.cookie }),
@@ -499,7 +502,7 @@ describe('Escape Room Falavinha v2 — API, Regras de Negócio & Segurança', ()
     const d3 = await e3.json()
     assert.equal(d3.penalidade, 10)
     assert.equal(d3.reprovado, true)
-    assert.equal(d3.bloqueioSegundos, 10)
+    assert.equal(d3.bloqueioSegundos, 20)
     assert.equal(d3.opcoesResetadas, true)
     assert.equal(d3.partida.segundosPenalidade, 20)
     assert.equal(d3.partida.opcoesDesabilitadas.length, 0)
@@ -509,7 +512,7 @@ describe('Escape Room Falavinha v2 — API, Regras de Negócio & Segurança', ()
       'Histórico de erros acumulados do conselheiro deve ser preservado mesmo após reset do ciclo'
     )
 
-    // Durante bloqueio de 10s, tentar responder mesmo conselheiro -> 423
+    // Durante bloqueio de 20s, tentar responder mesmo conselheiro -> 423
     const locked = await fetch(`${baseUrl}/partidas/${partida.id}/validar`, {
       method: 'POST',
       headers: jsonHeaders({ Cookie: user.cookie }),
@@ -526,13 +529,26 @@ describe('Escape Room Falavinha v2 — API, Regras de Negócio & Segurança', ()
     assert.equal(other.status, 200)
     const dOther = await other.json()
     assert.equal(dOther.acertou, true)
+    assert.equal(dOther.cronometroPausado, true)
+    assert.ok(dOther.duracaoLeituraMs >= 2500)
+
+    // Retomar cronômetro encerra a pausa aberta na aprovação
+    const resumeRes = await fetch(`${baseUrl}/partidas/${partida.id}/retomar-cronometro`, {
+      method: 'POST',
+      headers: jsonHeaders({ Cookie: user.cookie }),
+      body: JSON.stringify({}),
+    })
+    assert.equal(resumeRes.status, 200)
+    const resumeData = await resumeRes.json()
+    assert.equal(resumeData.ok, true)
+    assert.equal(resumeData.cronometroPausado, false)
   })
 
-  test('Regras puras de bônus, erro e cálculo server-side do cronômetro', () => {
+  test('Regras puras de bônus, erro, pausa server-side e falas educativas (Caminho A)', () => {
     assert.deepEqual(avaliarResultadoErro({ errosAnterioresNoCiclo: 2 }), {
       reprovado: true,
       penalidade: 10,
-      bloqueioSegundos: 10,
+      bloqueioSegundos: 20,
     })
 
     const combo = avaliarBonusAcerto({
@@ -557,11 +573,35 @@ describe('Escape Room Falavinha v2 — API, Regras de Negócio & Segurança', ()
     })
     assert.equal(tempoServidor, 15)
 
+    // Pausa server-side: congela o tempo durante a janela de leitura e limita ao teto anti-cheat
+    const pausedPartida = {
+      segundosReais: 10,
+      cronometroIniciadoEm: new Date(now.getTime() - 14000),
+      pausaMsAcumulados: 0,
+      pausadoDesde: new Date(now.getTime() - 4000),
+      pausaMaximaAte: new Date(now.getTime() + 1000),
+    }
+    assert.equal(calcularTempoServidor({ partida: pausedPartida, now }), 10)
+
+    const expiredPausePartida = {
+      segundosReais: 10,
+      cronometroIniciadoEm: new Date(now.getTime() - 25000),
+      pausaMsAcumulados: 0,
+      pausadoDesde: new Date(now.getTime() - 15000),
+      pausaMaximaAte: new Date(now.getTime() - 10000), // teto de 5s
+    }
+    assert.equal(calcularTempoServidor({ partida: expiredPausePartida, now }), 20)
+    assert.equal(consolidarPausaServidor({ partida: expiredPausePartida, now }).pausaMsAcumulados, 5000)
+
+    // Estimativa determinística da leitura da aprovação respeita mínimo de 2,5s
+    assert.equal(estimarDuracaoLeituraAprovacaoMs('Curto!'), 2500)
+    assert.ok(estimarDuracaoLeituraAprovacaoMs('A'.repeat(200)) > 4000)
+
     // Mascaramento LGPD de e-mail para logs de auditoria
     assert.equal(maskEmail('joao.oliveira@falavinha.com.br'), 'jo***@falavinha.com.br')
     assert.equal(maskEmail('ab@falavinha.com.br'), 'a***@falavinha.com.br')
 
-    // Falas dinâmicas de aprovação e concordância de gênero nas falas cruzadas (Sapo / Vanessa)
+    // Falas dinâmicas de aprovação (Caminho A): mesmo com toque cruzado, preserva 100% do conteúdo educativo
     assert.equal(
       formatarFalaComReferencia(
         'Passou {pelo_pela} {nome} e agora passou por mim também.',
@@ -576,15 +616,33 @@ describe('Escape Room Falavinha v2 — API, Regras de Negócio & Segurança', ()
       ),
       'Passou pela Vanessa e agora passou por mim também.'
     )
-    const falaCruzada = selecionarMensagemAprovacao({
+    const falaCombinada = gerarMensagemAprovacao({
       membroId: 2,
       acertouDePrimeira: true,
       membrosJaAprovados: [1],
       membrosRestantes: [3, 4],
       rng: () => 0.05,
     })
-    assert.ok(falaCruzada.includes('Sapo'), `Esperava referência ao Sapo, obteve: ${falaCruzada}`)
-    assert.equal(falaCruzada.includes('{'), false)
+    assert.equal(falaCombinada.usouCruzada, true)
+    assert.equal(falaCombinada.citouMembroId, 1)
+    assert.ok(falaCombinada.mensagem.includes('Sapo'), `Esperava referência ao Sapo, obteve: ${falaCombinada.mensagem}`)
+    assert.ok(
+      falaCombinada.mensagem.includes('Energia para transformar'),
+      `Caminho A deve manter conteúdo educativo mesmo com toque cruzado, obteve: ${falaCombinada.mensagem}`
+    )
+    assert.equal(falaCombinada.mensagem.includes('{'), false)
+
+    // Anti-repetição: se o Sapo (1) já foi citado, prioriza conselheiro inédito (ex.: Vanessa = 3)
+    const falaSemRepetir = gerarMensagemAprovacao({
+      membroId: 2,
+      acertouDePrimeira: true,
+      membrosJaAprovados: [1],
+      membrosRestantes: [3],
+      membrosJaCitados: [1],
+      rng: () => 0.05,
+    })
+    assert.equal(falaSemRepetir.citouMembroId, 3)
+    assert.ok(falaSemRepetir.mensagem.includes('Vanessa'))
 
     const falaEducativa = selecionarMensagemAprovacao({
       membroId: 1,

@@ -141,7 +141,9 @@ function MazeViewport({
       container.appendChild(renderer.domElement)
 
       scene = new THREE.Scene()
-      scene.background = new THREE.Color(SCENE_BG)
+      const baseBgColor = new THREE.Color(SCENE_BG)
+      const errorBgColor = new THREE.Color('#e39790')
+      scene.background = baseBgColor.clone()
       scene.fog = new THREE.Fog(SCENE_BG, 55, 130)
 
       pmrem = new THREE.PMREMGenerator(renderer)
@@ -153,11 +155,6 @@ function MazeViewport({
       const world = createWorldState()
       if (triggerErrorRef.current) {
         world.errorActive = true
-        world.errorAt = performance.now()
-        if (phoneAudioRef.current) {
-          phoneAudioRef.current.currentTime = 0
-          phoneAudioRef.current.play().catch(() => {})
-        }
       }
       worldRef.current = world
 
@@ -207,8 +204,8 @@ function MazeViewport({
       dirLight.shadow.normalBias = 0.02
       scene.add(dirLight)
 
-      const errorRedLight = new THREE.PointLight('#ff2a2a', 0, 16, 2)
-      errorRedLight.position.set(1.5, 3.2, 0.5)
+      const errorRedLight = new THREE.PointLight('#ff1f1f', 0, 28, 1.35)
+      errorRedLight.position.set(0.5, 4.2, 0.2)
       scene.add(errorRedLight)
 
       const camera = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.5, 160)
@@ -264,12 +261,19 @@ function MazeViewport({
         if (mountMs === null) {
           mountMs = nowMs
           prevMs = nowMs
+          if (world.errorActive && world.errorAt < 0) {
+            world.errorAt = nowMs
+            if (phoneAudioRef.current) {
+              phoneAudioRef.current.currentTime = 0
+              phoneAudioRef.current.play().catch(() => {})
+            }
+          }
         }
         const dt = Math.max(0, Math.min((nowMs - prevMs) / 1000, 0.05))
         prevMs = nowMs
         const elapsedSec = Math.max(0, (nowMs - mountMs) / 1000)
 
-        structure.update(elapsedSec, dt)
+        structure.update(elapsedSec, dt, nowMs)
         room.update(elapsedSec, nowMs, world)
         johnny.update(dt, nowMs, targetStepRef.current, world, {
           onFootstep,
@@ -287,8 +291,12 @@ function MazeViewport({
           pulseMesh.visible = false
         }
 
-        const { e, k: errK } = errorIntensity(world, nowMs)
-        errorRedLight.intensity = errK > 0 ? (0.5 + 0.5 * Math.sin(e * 22)) * 55 * errK : 0
+        const { e, k: errK, flash: errFlash } = errorIntensity(world, nowMs)
+        errorRedLight.intensity = errFlash > 0 ? errFlash * 95 : 0
+        if (world.errorActive) {
+          scene.background.copy(baseBgColor).lerp(errorBgColor, errFlash * 0.68)
+          scene.fog.color.copy(scene.background)
+        }
 
         let fov = BASE_FOV
         if (animateIntroRef.current) {
@@ -397,7 +405,7 @@ function MazeViewport({
  */
 function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
   const { player, isLocked, actionError, clearActionError } = useGame()
-  const { mode, fromStep, toStep, memberName, isFinal, lockSeconds = 10 } = modalState
+  const { mode, fromStep, toStep, memberName, isFinal, lockSeconds = 20 } = modalState
   const [displayedStep, setDisplayedStep] = useState(fromStep)
   const avatarGender = player?.genero || 'masculino'
 
@@ -445,11 +453,11 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
           : 'Visão Geral do Percurso 3D'
 
   const description = isIntro
-    ? 'A cada conselheiro aprovado, o colaborador avança uma etapa por esses corredores até alcançar a sala do cliente.'
+    ? 'Cada aprovação garante 1 selo oficial e faz o colaborador avançar uma etapa. Você só sai do Conselho com os 7 selos conquistados!'
     : isError
       ? `Você atingiu 3 erros nesta cadeira (+10s de penalidade). O conselheiro foi bloqueado por ${lockSeconds}s e as alternativas serão reembaralhadas — desafie outro membro enquanto aguarda!`
       : isFinal
-        ? 'Todos os 7 conselheiros foram convencidos e o colaborador cruzou a porta final.'
+        ? 'Os 7 selos oficiais foram conquistados e o colaborador cruzou a porta final!'
         : isProgress
           ? `O colaborador avançou para a etapa ${toStep} de ${MAZE_STEPS}. Faltam ${MAZE_STEPS - toStep} ${
               MAZE_STEPS - toStep === 1 ? 'conselheiro' : 'conselheiros'
@@ -527,6 +535,14 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
                 gender={avatarGender}
               />
             </WebGLBoundary>
+
+            {/* Alerta visual pulsante em vermelho no modo erro (funciona também sem áudio) */}
+            {isError && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-[5] animate-maze-error-flash"
+              />
+            )}
           </div>
 
           {/* Alerta de erro visível dentro do modal (ex.: falha ao iniciar cronômetro no servidor) */}

@@ -299,3 +299,167 @@ export function playVictorySound() {
     // Ignora
   }
 }
+
+/**
+ * Batida grave e seca (estilo impacto/martelo de tribunal) para a entrada
+ * sequencial dos 7 conselheiros na bancada, com ressonância mais marcante no último.
+ */
+export function playCouncilPopSound(index = 0, total = 7) {
+  try {
+    const ctx = getAudioContext()
+    if (!ctx) return
+    const now = ctx.currentTime
+    const isFinal = index >= total - 1
+
+    // Corpo grave seco ("thud" abafado de bancada)
+    const bodyOsc = ctx.createOscillator()
+    const bodyGain = ctx.createGain()
+    bodyOsc.type = 'sine'
+    const startFreq = isFinal ? 115 : 98 + (index % 2) * 4
+    const endFreq = isFinal ? 38 : 46
+    const bodyDur = isFinal ? 0.34 : 0.19
+
+    bodyOsc.frequency.setValueAtTime(startFreq, now)
+    bodyOsc.frequency.exponentialRampToValueAtTime(endFreq, now + bodyDur)
+
+    bodyGain.gain.setValueAtTime(0.001, now)
+    bodyGain.gain.linearRampToValueAtTime(isFinal ? 0.28 : 0.2, now + 0.008)
+    bodyGain.gain.exponentialRampToValueAtTime(0.001, now + bodyDur)
+
+    bodyOsc.connect(bodyGain)
+    bodyGain.connect(ctx.destination)
+    bodyOsc.start(now)
+    bodyOsc.stop(now + bodyDur + 0.02)
+
+    // Transiente curto abafado (textura seca de madeira/carimbo)
+    const sampleCount = Math.floor(ctx.sampleRate * 0.035)
+    const noiseBuffer = ctx.createBuffer(1, sampleCount, ctx.sampleRate)
+    const channelData = noiseBuffer.getChannelData(0)
+    for (let i = 0; i < sampleCount; i += 1) {
+      channelData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sampleCount * 0.28))
+    }
+
+    const noiseSrc = ctx.createBufferSource()
+    noiseSrc.buffer = noiseBuffer
+
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'lowpass'
+    filter.frequency.setValueAtTime(isFinal ? 360 : 290, now)
+
+    const noiseGain = ctx.createGain()
+    noiseGain.gain.setValueAtTime(isFinal ? 0.16 : 0.11, now)
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.035)
+
+    noiseSrc.connect(filter)
+    filter.connect(noiseGain)
+    noiseGain.connect(ctx.destination)
+    noiseSrc.start(now)
+
+    // Ressonância grave discreta ao fechar o 7º conselheiro na bancada
+    if (isFinal) {
+      const subOsc = ctx.createOscillator()
+      const subGain = ctx.createGain()
+      subOsc.type = 'triangle'
+      subOsc.frequency.setValueAtTime(65, now + 0.01)
+      subOsc.frequency.exponentialRampToValueAtTime(42, now + 0.45)
+
+      subGain.gain.setValueAtTime(0.001, now + 0.01)
+      subGain.gain.linearRampToValueAtTime(0.14, now + 0.03)
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.46)
+
+      subOsc.connect(subGain)
+      subGain.connect(ctx.destination)
+      subOsc.start(now + 0.01)
+      subOsc.stop(now + 0.48)
+    }
+  } catch {
+    // Ignora
+  }
+}
+
+/**
+ * Som tátil de carimbo pesado pressionando cera quente sobre o documento:
+ * combina impacto grave seco, textura abafada de cera e clique curto de assentamento.
+ */
+export function playWaxSealStampSound() {
+  try {
+    const ctx = getAudioContext()
+    if (!ctx) return
+    const now = ctx.currentTime
+
+    // 1. Corpo grave do impacto na bancada ("thump" pesado e seco)
+    const bodyOsc = ctx.createOscillator()
+    const bodyGain = ctx.createGain()
+    bodyOsc.type = 'sine'
+    bodyOsc.frequency.setValueAtTime(148, now)
+    bodyOsc.frequency.exponentialRampToValueAtTime(38, now + 0.22)
+
+    bodyGain.gain.setValueAtTime(0.001, now)
+    bodyGain.gain.linearRampToValueAtTime(0.34, now + 0.006)
+    bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24)
+
+    bodyOsc.connect(bodyGain)
+    bodyGain.connect(ctx.destination)
+    bodyOsc.start(now)
+    bodyOsc.stop(now + 0.26)
+
+    // 2. Sub-ressonância curta de madeira/mesa
+    const subOsc = ctx.createOscillator()
+    const subGain = ctx.createGain()
+    subOsc.type = 'triangle'
+    subOsc.frequency.setValueAtTime(82, now)
+    subOsc.frequency.exponentialRampToValueAtTime(32, now + 0.16)
+
+    subGain.gain.setValueAtTime(0.001, now)
+    subGain.gain.linearRampToValueAtTime(0.18, now + 0.008)
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18)
+
+    subOsc.connect(subGain)
+    subGain.connect(ctx.destination)
+    subOsc.start(now)
+    subOsc.stop(now + 0.2)
+
+    // 3. Textura curta de pressão na cera/papel (ruído filtrado)
+    const sampleCount = Math.floor(ctx.sampleRate * 0.048)
+    const noiseBuffer = ctx.createBuffer(1, sampleCount, ctx.sampleRate)
+    const channelData = noiseBuffer.getChannelData(0)
+    for (let i = 0; i < sampleCount; i += 1) {
+      channelData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sampleCount * 0.24))
+    }
+
+    const noiseSrc = ctx.createBufferSource()
+    noiseSrc.buffer = noiseBuffer
+
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.setValueAtTime(620, now)
+    filter.Q.setValueAtTime(1.1, now)
+
+    const noiseGain = ctx.createGain()
+    noiseGain.gain.setValueAtTime(0.22, now)
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.048)
+
+    noiseSrc.connect(filter)
+    filter.connect(noiseGain)
+    noiseGain.connect(ctx.destination)
+    noiseSrc.start(now)
+
+    // 4. Estalo sutil do sinete ao firmar a cera
+    const latchOsc = ctx.createOscillator()
+    const latchGain = ctx.createGain()
+    latchOsc.type = 'triangle'
+    latchOsc.frequency.setValueAtTime(420, now + 0.012)
+    latchOsc.frequency.exponentialRampToValueAtTime(175, now + 0.055)
+
+    latchGain.gain.setValueAtTime(0.001, now + 0.012)
+    latchGain.gain.linearRampToValueAtTime(0.09, now + 0.016)
+    latchGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06)
+
+    latchOsc.connect(latchGain)
+    latchGain.connect(ctx.destination)
+    latchOsc.start(now + 0.012)
+    latchOsc.stop(now + 0.068)
+  } catch {
+    // Ignora
+  }
+}

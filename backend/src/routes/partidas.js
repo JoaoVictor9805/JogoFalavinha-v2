@@ -3,7 +3,7 @@ import { isValidUuid } from '../data/constantes.js'
 import prisma from '../db.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { formatarDataBrasilia } from '../utils/dateFormatter.js'
-import { selecionarMensagemAprovacao } from '../utils/dialogosConselho.js'
+import { gerarMensagemAprovacao } from '../utils/dialogosConselho.js'
 import {
   COOLDOWN_APOS_APROVACAO_MS,
   TEMPO_SUSPEITO_CONCLUSAO_SEGUNDOS,
@@ -11,6 +11,8 @@ import {
   avaliarResultadoErro,
   calcularSegundosTotais,
   calcularTempoServidor,
+  consolidarPausaServidor,
+  estimarDuracaoLeituraAprovacaoMs,
 } from '../utils/gameRules.js'
 import { logSecurityEvent } from '../utils/securityLogger.js'
 import { invalidateRankingCache } from './ranking.js'
@@ -401,12 +403,12 @@ router.post('/:id/iniciar-cronometro', async (req, res) => {
  * - Calcula tempo 100% server-side (ignora segundos enviados pelo cliente)
  * - Impede race condition e dupla penalidade
  * - Acertos seguidos de primeira ativam Combo (-5s) e partida sem erros ganha bônus Invicto (-10s)
- * - 1º/2º erro: +5s | 3º erro: +10s, bloqueio de 10s e reset das opções do conselheiro
+ * - 1º/2º erro: +5s | 3º erro: +10s, bloqueio de 20s e reset das opções do conselheiro
  */
 router.post('/:id/validar', async (req, res) => {
   try {
     const { id } = req.params
-    const { membroId, opcaoId } = req.body || {}
+    const { membroId, opcaoId, membrosJaCitados, evitarCruzada } = req.body || {}
 
     if (!isValidUuid(id)) {
       return res.status(400).json({ erro: 'ID da partida inválido.' })
@@ -418,6 +420,14 @@ router.post('/:id/validar', async (req, res) => {
     if (!Number.isInteger(membroNum) || membroNum < 1 || !['a', 'b', 'c', 'd'].includes(opcaoStr)) {
       return res.status(400).json({ erro: 'membroId ou opcaoId inválidos.' })
     }
+
+    const citadosSanitizados = Array.isArray(membrosJaCitados)
+      ? membrosJaCitados
+          .slice(0, 20)
+          .map(Number)
+          .filter((n) => Number.isInteger(n) && n >= 1 && n <= 7)
+      : []
+    const evitarCruzadaFlag = Boolean(evitarCruzada)
 
     const outcome = await prisma.$transaction(async (tx) => {
       // Lock de linha na partida evita condições de corrida entre cliques/abas simultâneas
@@ -489,7 +499,7 @@ router.post('/:id/validar', async (req, res) => {
         }
       }
 
-      // Verifica se este conselheiro está temporariamente bloqueado (10s após 3 erros)
+      // Verifica se este conselheiro está temporariamente bloqueado (20s após 3 erros)
       const bloqueioAtivo = partida.bloqueios.find(
         (b) => b.membroId === membroNum && b.bloqueadoAte && b.bloqueadoAte > now
       )
@@ -535,8 +545,17 @@ router.post('/:id/validar', async (req, res) => {
         }
       }
 
+      // Consolida eventual pausa de aprovação anterior antes de computar o tempo oficial
+      const pausaConsolidada = consolidarPausaServidor({ partida, now })
+      const partidaSemPausaAtiva = {
+        ...partida,
+        pausaMsAcumulados: pausaConsolidada.pausaMsAcumulados,
+        pausadoDesde: null,
+        pausaMaximaAte: null,
+      }
+
       // Tempo 100% calculado no servidor (ignora segundos enviados pelo navegador)
-      const segundosValidos = calcularTempoServidor({ partida, now })
+      const segundosValidos = calcularTempoServidor({ partida: partidaSemPausaAtiva, now })
 
       // CENÁRIO 1: O JOGADOR ACERTOU
       if (opcao.correta) {
@@ -578,6 +597,19 @@ router.post('/:id/validar', async (req, res) => {
           totalErrosPartida: partida.totalErros,
         })
 
+        const todosDesafiosIds = Array.from({ length: totalDesafios }, (_, idx) => idx + 1)
+        const membrosRestantes = todosDesafiosIds.filter((id) => !novosMembros.includes(id))
+        const resultadoMensagem = gerarMensagemAprovacao({
+          membroId: membroNum,
+          mensagemPadrao: opcao.desafio.mensagemAprovacao,
+          acertouDePrimeira,
+          membrosJaAprovados: partida.membrosConcluidos,
+          membrosRestantes,
+          membrosJaCitados: citadosSanitizados,
+          evitarCruzada: evitarCruzadaFlag,
+        })
+        const duracaoLeituraMs = estimarDuracaoLeituraAprovacaoMs(resultadoMensagem.mensagem)
+
         const novoSegundosBonus = partida.segundosBonus + bonus.bonusTotalAplicado
         const novoSegundosTotais = calcularSegundosTotais({
           segundosReais: segundosValidos,
@@ -593,6 +625,9 @@ router.post('/:id/validar', async (req, res) => {
           segundosTotais: novoSegundosTotais,
           comboAtual: bonus.novoComboAtual,
           totalCombos: partida.totalCombos + bonus.incrementTotalCombos,
+          pausaMsAcumulados: pausaConsolidada.pausaMsAcumulados,
+          pausadoDesde: jogoConcluido ? null : now,
+          pausaMaximaAte: jogoConcluido ? null : new Date(now.getTime() + duracaoLeituraMs),
           ultimoSyncEm: now,
         }
 
@@ -607,16 +642,6 @@ router.post('/:id/validar', async (req, res) => {
           include: PARTIDA_INCLUDE,
         })
 
-        const todosDesafiosIds = Array.from({ length: totalDesafios }, (_, idx) => idx + 1)
-        const membrosRestantes = todosDesafiosIds.filter((id) => !novosMembros.includes(id))
-        const mensagemAprovacaoDinamica = selecionarMensagemAprovacao({
-          membroId: membroNum,
-          mensagemPadrao: opcao.desafio.mensagemAprovacao,
-          acertouDePrimeira,
-          membrosJaAprovados: partida.membrosConcluidos,
-          membrosRestantes,
-        })
-
         return {
           httpStatus: 200,
           completed: jogoConcluido,
@@ -625,7 +650,11 @@ router.post('/:id/validar', async (req, res) => {
             acertou: true,
             acertouDePrimeira,
             membroId: membroNum,
-            mensagemAprovacao: mensagemAprovacaoDinamica,
+            mensagemAprovacao: resultadoMensagem.mensagem,
+            citouMembroId: resultadoMensagem.citouMembroId,
+            usouCruzada: resultadoMensagem.usouCruzada,
+            duracaoLeituraMs,
+            cronometroPausado: !jogoConcluido,
             etapaAtual: partidaAtualizada.etapaAtual,
             membrosConcluidos: partidaAtualizada.membrosConcluidos,
             jogoConcluido,
@@ -643,7 +672,7 @@ router.post('/:id/validar', async (req, res) => {
         }
       }
 
-      // CENÁRIO 2: O JOGADOR ERROU (1º/2º erro: +5s | 3º erro: +10s, bloqueio 10s e reset)
+      // CENÁRIO 2: O JOGADOR ERROU (1º/2º erro: +5s | 3º erro: +10s, bloqueio 20s e reset)
       const errosAnterioresNoCiclo = partida.opcoesDesabilitadas.filter(
         (o) => o.membroId === membroNum
       ).length
@@ -683,7 +712,7 @@ router.post('/:id/validar', async (req, res) => {
           },
         })
 
-        // Reseta as 4 opções deste conselheiro para a volta após os 10s
+        // Reseta as 4 opções deste conselheiro para a volta após os 20s
         await tx.opcaoDesabilitada.deleteMany({
           where: {
             partidaId: partida.id,
@@ -716,6 +745,9 @@ router.post('/:id/validar', async (req, res) => {
           segundosReais: segundosValidos,
           segundosTotais: novoTotal,
           comboAtual: 0,
+          pausaMsAcumulados: pausaConsolidada.pausaMsAcumulados,
+          pausadoDesde: null,
+          pausaMaximaAte: null,
           ultimoSyncEm: now,
         },
         include: PARTIDA_INCLUDE,
@@ -815,7 +847,27 @@ router.post('/:id/sincronizar-tempo', async (req, res) => {
       }
 
       const now = new Date()
-      const segundosSeguros = calcularTempoServidor({ partida, now })
+      const pausaExpirou =
+        Boolean(partida.pausadoDesde && partida.pausaMaximaAte) && now >= partida.pausaMaximaAte
+      const cronometroPausado =
+        Boolean(partida.pausadoDesde && partida.pausaMaximaAte) && now < partida.pausaMaximaAte
+
+      let dadosPausa = {}
+      let partidaBaseCalculo = partida
+      if (pausaExpirou) {
+        const consolidada = consolidarPausaServidor({ partida, now })
+        dadosPausa = {
+          pausaMsAcumulados: consolidada.pausaMsAcumulados,
+          pausadoDesde: null,
+          pausaMaximaAte: null,
+        }
+        partidaBaseCalculo = {
+          ...partida,
+          ...dadosPausa,
+        }
+      }
+
+      const segundosSeguros = calcularTempoServidor({ partida: partidaBaseCalculo, now })
       const segundosTotais = calcularSegundosTotais({
         segundosReais: segundosSeguros,
         segundosPenalidade: partida.segundosPenalidade,
@@ -828,6 +880,7 @@ router.post('/:id/sincronizar-tempo', async (req, res) => {
           segundosReais: segundosSeguros,
           segundosTotais,
           ultimoSyncEm: now,
+          ...dadosPausa,
         },
       })
 
@@ -837,6 +890,7 @@ router.post('/:id/sincronizar-tempo', async (req, res) => {
           ok: true,
           segundosReais: segundosSeguros,
           segundosTotais,
+          cronometroPausado,
         },
       }
     })
@@ -845,6 +899,92 @@ router.post('/:id/sincronizar-tempo', async (req, res) => {
   } catch (error) {
     console.error('[partidas/sincronizar-tempo] Erro:', error)
     return res.status(500).json({ erro: 'Erro interno ao sincronizar tempo.' })
+  }
+})
+
+/**
+ * POST /api/partidas/:id/retomar-cronometro
+ * Encerra a pausa oficial aberta durante a fala final de aprovação do conselheiro,
+ * consolidando em `pausaMsAcumulados` apenas o tempo realmente decorrido (limitado ao teto server-side).
+ */
+router.post('/:id/retomar-cronometro', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    if (!isValidUuid(id)) {
+      return res.status(400).json({ erro: 'ID da partida inválido.' })
+    }
+
+    const outcome = await prisma.$transaction(async (tx) => {
+      const lockedRows = await tx.$queryRaw`
+        SELECT id FROM "partidas" WHERE id = ${id} FOR UPDATE
+      `
+      if (!Array.isArray(lockedRows) || lockedRows.length === 0) {
+        return { httpStatus: 404, payload: { erro: 'Partida não encontrada.' } }
+      }
+
+      const partida = await tx.partida.findUnique({ where: { id } })
+      if (!partida) {
+        return { httpStatus: 404, payload: { erro: 'Partida não encontrada.' } }
+      }
+
+      if (partida.jogadorId !== req.jogadorId) {
+        return {
+          httpStatus: 403,
+          payload: { erro: 'Você não tem permissão para atualizar esta partida.' },
+        }
+      }
+
+      if (partida.status !== 'EM_ANDAMENTO' || !partida.cronometroIniciadoEm) {
+        return { httpStatus: 200, payload: { ok: false, cronometroPausado: false } }
+      }
+
+      const now = new Date()
+      const consolidada = consolidarPausaServidor({ partida, now })
+      const partidaRetomada = {
+        ...partida,
+        pausaMsAcumulados: consolidada.pausaMsAcumulados,
+        pausadoDesde: null,
+        pausaMaximaAte: null,
+      }
+
+      const segundosSeguros = calcularTempoServidor({ partida: partidaRetomada, now })
+      const segundosTotais = calcularSegundosTotais({
+        segundosReais: segundosSeguros,
+        segundosPenalidade: partida.segundosPenalidade,
+        segundosBonus: partida.segundosBonus,
+      })
+
+      if (consolidada.tinhaPausa) {
+        await tx.partida.update({
+          where: { id },
+          data: {
+            pausaMsAcumulados: consolidada.pausaMsAcumulados,
+            pausadoDesde: null,
+            pausaMaximaAte: null,
+            segundosReais: segundosSeguros,
+            segundosTotais,
+            ultimoSyncEm: now,
+          },
+        })
+      }
+
+      return {
+        httpStatus: 200,
+        payload: {
+          ok: true,
+          segundosReais: segundosSeguros,
+          segundosTotais,
+          pausaConcluidaMs: consolidada.pausaConcluidaMs,
+          cronometroPausado: false,
+        },
+      }
+    })
+
+    return res.status(outcome.httpStatus).json(outcome.payload)
+  } catch (error) {
+    console.error('[partidas/retomar-cronometro] Erro:', error)
+    return res.status(500).json({ erro: 'Erro interno ao retomar cronômetro.' })
   }
 })
 

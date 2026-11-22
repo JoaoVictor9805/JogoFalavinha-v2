@@ -75,19 +75,30 @@ export const VARIACOES_APROVACAO_POR_MEMBRO = {
   },
 }
 
-export const FALAS_CRUZADAS_APROVACAO_APROVADOS = [
-  'Agora entendi por que {o_a} {nome} te aprovou! Mandou muito bem!',
-  '{O_A} {nome} tinha razão: você realmente veio preparado. Aprovado!',
-  'Passou {pelo_pela} {nome} e agora passou por mim também. Tá voando!',
-  'Primeiro {o_a} {nome}, agora eu... desse jeito você fecha o Conselho rapidinho!',
-  'Não é à toa que {o_a} {nome} já te deu o voto. Mandou bem demais!',
+/**
+ * Prefixos curtos acoplados ANTES da fala educativa quando o conselheiro comenta
+ * alguém que já aprovou o jogador (Caminho A: 100% do conteúdo educativo preservado).
+ */
+export const PREFIXOS_CRUZADOS_APROVACAO_APROVADOS = [
+  'Agora entendi por que {o_a} {nome} te aprovou!',
+  '{O_A} {nome} tinha razão: você veio preparado!',
+  'Passou {pelo_pela} {nome} e agora passou por mim também!',
+  'Não é à toa que {o_a} {nome} já te deu o voto!',
 ]
 
-export const FALAS_CRUZADAS_APROVACAO_PENDENTES = [
-  'Comigo foi tranquilo — quero ver manter esse ritmo com {o_a} {nome}!',
-  'Meu voto está garantido! Agora vai lá mostrar esse mesmo preparo {pro_pra} {nome}.',
-  'Aprovado! Já vou avisar {o_a} {nome} que você está chegando com tudo.',
+/**
+ * Sufixos curtos acoplados DEPOIS da fala educativa quando o conselheiro provoca
+ * sobre alguém que ainda falta enfrentar (Caminho A: 100% do conteúdo educativo preservado).
+ */
+export const SUFIXOS_CRUZADOS_APROVACAO_PENDENTES = [
+  'Quero ver manter esse ritmo com {o_a} {nome}!',
+  'Agora vai mostrar esse mesmo preparo {pro_pra} {nome}!',
+  'Já vou avisar {o_a} {nome} que você está chegando com tudo!',
 ]
+
+// Aliases mantidos para compatibilidade de imports
+export const FALAS_CRUZADAS_APROVACAO_APROVADOS = PREFIXOS_CRUZADOS_APROVACAO_APROVADOS
+export const FALAS_CRUZADAS_APROVACAO_PENDENTES = SUFIXOS_CRUZADOS_APROVACAO_PENDENTES
 
 function sortearItem(lista, rng = Math.random) {
   if (!Array.isArray(lista) || lista.length === 0) return null
@@ -108,52 +119,162 @@ export function formatarFalaComReferencia(template, ref) {
 }
 
 /**
- * Seleciona dinamicamente a mensagem de aprovação exibida após o acerto:
- * - Alterna entre uma das variações educativas do próprio conselheiro (~60%)
- *   ou uma fala cruzada positiva referenciando outro conselheiro real da partida (~40%).
+ * Escolhe o conselheiro alvo de uma fala cruzada em estilo "baralho sem reposição":
+ * - Prioriza exclusivamente conselheiros que ainda não foram citados na partida.
+ * - Quando todos os disponíveis já foram citados, reinicia o ciclo evitando repetir o último citado.
+ * - Balanceia proporcionalmente entre aprovados e pendentes para não concentrar tudo no 1º aprovado.
  */
-export function selecionarMensagemAprovacao({
+function escolherAlvoCruzado({
+  aprovadosValidos = [],
+  restantesValidos = [],
+  membrosJaCitados = [],
+  rng = Math.random,
+}) {
+  const citadosLimpos = Array.isArray(membrosJaCitados)
+    ? membrosJaCitados.map(Number).filter((id) => Boolean(CONSELHEIROS_REFERENCIA[id]))
+    : []
+  const citadosSet = new Set(citadosLimpos)
+  const ultimoCitadoId = citadosLimpos.length > 0 ? citadosLimpos[citadosLimpos.length - 1] : null
+
+  const aprovadosIneditos = aprovadosValidos.filter((id) => !citadosSet.has(id))
+  const restantesIneditos = restantesValidos.filter((id) => !citadosSet.has(id))
+
+  let poolAprovados = aprovadosIneditos
+  let poolRestantes = restantesIneditos
+
+  if (poolAprovados.length === 0 && poolRestantes.length === 0) {
+    const aprovadosSemUltimo = aprovadosValidos.filter((id) => id !== ultimoCitadoId)
+    const restantesSemUltimo = restantesValidos.filter((id) => id !== ultimoCitadoId)
+
+    if (aprovadosSemUltimo.length > 0 || restantesSemUltimo.length > 0) {
+      poolAprovados = aprovadosSemUltimo
+      poolRestantes = restantesSemUltimo
+    } else {
+      poolAprovados = aprovadosValidos
+      poolRestantes = restantesValidos
+    }
+  }
+
+  if (poolAprovados.length === 0 && poolRestantes.length === 0) {
+    return null
+  }
+
+  let usarAprovados = false
+  if (poolAprovados.length > 0 && poolRestantes.length === 0) {
+    usarAprovados = true
+  } else if (poolAprovados.length > 0 && poolRestantes.length > 0) {
+    const pesoAprovados = poolAprovados.length * 1.25
+    const pesoRestantes = poolRestantes.length
+    usarAprovados = rng() < pesoAprovados / (pesoAprovados + pesoRestantes)
+  }
+
+  const alvoId = usarAprovados
+    ? sortearItem(poolAprovados, rng)
+    : sortearItem(poolRestantes, rng)
+
+  if (!alvoId) return null
+  return {
+    alvoId,
+    tipo: usarAprovados ? 'aprovado' : 'pendente',
+  }
+}
+
+/**
+ * Gera a mensagem de aprovação (Caminho A):
+ * - 100% das aprovações preservam a variação educativa do próprio conselheiro.
+ * - Em uma minoria das aprovações (~25%, respeitando `evitarCruzada`), acopla um
+ *   prefixo/sufixo cruzado curto citando um conselheiro ainda não mencionado na partida.
+ */
+export function gerarMensagemAprovacao({
   membroId,
   mensagemPadrao = '',
   acertouDePrimeira = false,
   membrosJaAprovados = [],
   membrosRestantes = [],
+  membrosJaCitados = [],
+  evitarCruzada = false,
   rng = Math.random,
 }) {
-  const aprovadosValidos = membrosJaAprovados
-    .map(Number)
-    .filter((id) => id !== membroId && Boolean(CONSELHEIROS_REFERENCIA[id]))
-  const restantesValidos = membrosRestantes
-    .map(Number)
-    .filter((id) => id !== membroId && Boolean(CONSELHEIROS_REFERENCIA[id]))
-
-  const podeUsarCruzada = aprovadosValidos.length > 0 || restantesValidos.length > 0
-
-  if (podeUsarCruzada && rng() < 0.4) {
-    const usarAprovados =
-      aprovadosValidos.length > 0 && (restantesValidos.length === 0 || rng() < 0.65)
-
-    const alvoId = usarAprovados
-      ? sortearItem(aprovadosValidos, rng)
-      : sortearItem(restantesValidos, rng)
-    const template = usarAprovados
-      ? sortearItem(FALAS_CRUZADAS_APROVACAO_APROVADOS, rng)
-      : sortearItem(FALAS_CRUZADAS_APROVACAO_PENDENTES, rng)
-
-    if (alvoId && template) {
-      return formatarFalaComReferencia(template, CONSELHEIROS_REFERENCIA[alvoId])
-    }
-  }
-
   const config = VARIACOES_APROVACAO_POR_MEMBRO[membroId]
+  let mensagemEducacional = mensagemPadrao || 'Você tem o meu voto de aprovação no Conselho Next!'
+
   if (config) {
     const pool = [...config.padrao]
     if (acertouDePrimeira && config.primeiraTentativa) {
       pool.push(config.primeiraTentativa)
     }
     const escolhida = sortearItem(pool, rng)
-    if (escolhida) return escolhida
+    if (escolhida) {
+      mensagemEducacional = escolhida
+    }
   }
 
-  return mensagemPadrao || 'Você tem o meu voto de aprovação no Conselho Next!'
+  if (evitarCruzada) {
+    return {
+      mensagem: mensagemEducacional,
+      citouMembroId: null,
+      usouCruzada: false,
+    }
+  }
+
+  const aprovadosValidos = Array.from(
+    new Set(
+      membrosJaAprovados
+        .map(Number)
+        .filter((id) => id !== membroId && Boolean(CONSELHEIROS_REFERENCIA[id]))
+    )
+  )
+  const restantesValidos = Array.from(
+    new Set(
+      membrosRestantes
+        .map(Number)
+        .filter((id) => id !== membroId && Boolean(CONSELHEIROS_REFERENCIA[id]))
+    )
+  )
+
+  const podeUsarCruzada = aprovadosValidos.length > 0 || restantesValidos.length > 0
+
+  if (podeUsarCruzada && rng() < 0.25) {
+    const escolha = escolherAlvoCruzado({
+      aprovadosValidos,
+      restantesValidos,
+      membrosJaCitados,
+      rng,
+    })
+
+    if (escolha) {
+      const ref = CONSELHEIROS_REFERENCIA[escolha.alvoId]
+      const template =
+        escolha.tipo === 'aprovado'
+          ? sortearItem(PREFIXOS_CRUZADOS_APROVACAO_APROVADOS, rng)
+          : sortearItem(SUFIXOS_CRUZADOS_APROVACAO_PENDENTES, rng)
+
+      if (ref && template) {
+        const trechoCruzado = formatarFalaComReferencia(template, ref)
+        const mensagemCombinada =
+          escolha.tipo === 'aprovado'
+            ? `${trechoCruzado} ${mensagemEducacional}`
+            : `${mensagemEducacional} ${trechoCruzado}`
+
+        return {
+          mensagem: mensagemCombinada,
+          citouMembroId: escolha.alvoId,
+          usouCruzada: true,
+        }
+      }
+    }
+  }
+
+  return {
+    mensagem: mensagemEducacional,
+    citouMembroId: null,
+    usouCruzada: false,
+  }
+}
+
+/**
+ * Wrapper simples que retorna apenas o texto final da mensagem de aprovação.
+ */
+export function selecionarMensagemAprovacao(params) {
+  return gerarMensagemAprovacao(params).mensagem
 }

@@ -1,8 +1,9 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Clock, Compass, Flame, Loader2, Shield, User } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, Compass, Flame, Loader2, Pause, Shield, User } from 'lucide-react'
 import { useGame } from '../../context/gameContextInstance'
 import { formatarTempo } from '../../utils/validacaoDesafio'
 import { MAZE_STEPS } from '../maze3d/mazeData'
+import SealCaseDrawer from './SealCaseDrawer'
 
 const MazeModal3D = lazy(() => import('../maze3d/MazeModal3D'))
 
@@ -11,6 +12,7 @@ function HudTimerHeader() {
     screen,
     player,
     challenges,
+    isTimerPausedForApproval,
     realSeconds,
     penaltySeconds,
     bonusSeconds,
@@ -22,6 +24,7 @@ function HudTimerHeader() {
     completedCount,
     memberProgress,
     ceoBriefingDismissed,
+    councilEntranceState,
     mazeModal,
     openManualMazeModal,
     confirmIntroMazeAndStart,
@@ -50,9 +53,11 @@ function HudTimerHeader() {
     return () => clearTimeout(timer)
   }, [comboAlert?.key])
 
+  const isCouncilReady = ceoBriefingDismissed && councilEntranceState === 'done'
   const showSideHud =
-    (screen === 'TRIBUNAL_HUB' && ceoBriefingDismissed) || screen === 'FINAL_RANKING'
-  const showMapButton = screen === 'TRIBUNAL_HUB' && ceoBriefingDismissed && !mazeModal
+    (screen === 'TRIBUNAL_HUB' && isCouncilReady) || screen === 'FINAL_RANKING'
+  const showSealDrawer = showSideHud && !mazeModal
+  const showMapButton = screen === 'TRIBUNAL_HUB' && isCouncilReady && !mazeModal
   const showMazeModal = screen === 'TRIBUNAL_HUB' && Boolean(mazeModal)
 
   if (!showSideHud && !showMazeModal) {
@@ -137,24 +142,34 @@ function HudTimerHeader() {
                     ? 'border-red-600 border-r-4 border-r-red-600 scale-[1.03]'
                     : showComboFlash
                       ? 'border-emerald-600 border-r-4 border-r-emerald-600 scale-[1.03]'
-                      : 'border-stone-800 border-r-4 border-r-[#D99B38]'
+                      : isTimerPausedForApproval && screen === 'TRIBUNAL_HUB'
+                        ? 'border-emerald-700 border-r-4 border-r-emerald-600'
+                        : 'border-stone-800 border-r-4 border-r-[#D99B38]'
                 }`}
               >
                 <div
                   className={`w-8 h-8 rounded-none flex items-center justify-center shrink-0 transition-colors duration-300 ${
                     showPenaltyFlash
                       ? 'bg-red-600 text-white'
-                      : showComboFlash
+                      : showComboFlash || (isTimerPausedForApproval && screen === 'TRIBUNAL_HUB')
                         ? 'bg-emerald-600 text-white'
                         : 'bg-[#D99B38] text-stone-950'
                   }`}
                 >
-                  <Clock className="w-4 h-4" />
+                  {isTimerPausedForApproval && screen === 'TRIBUNAL_HUB' && !showPenaltyFlash ? (
+                    <Pause className="w-4 h-4" />
+                  ) : (
+                    <Clock className="w-4 h-4" />
+                  )}
                 </div>
 
                 <div className="text-right">
-                  <div className="text-[9px] font-black uppercase tracking-[0.2em] text-stone-500 leading-tight">
-                    Tempo Total
+                  <div className="text-[9px] font-black uppercase tracking-[0.2em] leading-tight flex items-center justify-end gap-1.5">
+                    {isTimerPausedForApproval && screen === 'TRIBUNAL_HUB' ? (
+                      <span className="text-emerald-700">Pausado</span>
+                    ) : (
+                      <span className="text-stone-500">Tempo Total</span>
+                    )}
                   </div>
                   <div className="font-mono text-lg sm:text-xl font-black leading-none tracking-tight text-stone-900 mt-0.5">
                     {formatarTempo(totalSeconds)}
@@ -211,6 +226,9 @@ function HudTimerHeader() {
           </div>
         </header>
       )}
+
+      {/* Gaveta retrátil na lateral direita com os 7 Selos de Cera */}
+      {showSealDrawer && <SealCaseDrawer />}
 
       {/* Botão Flutuante Discreto no Canto Inferior Direito para Visualizar o Mapa 3D */}
       {showMapButton && (

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { DoorClosed, Volume2 } from 'lucide-react'
+import { DoorClosed } from 'lucide-react'
 import { useGame } from '../../context/gameContextInstance'
 import { playArrivalDoorSound as triggerDoorAudio } from '../../utils/soundEffects'
 
@@ -33,11 +33,6 @@ function ArrivalTransition() {
       <div className="max-w-xl w-full bg-[#FDFBF7] border-2 border-stone-900 border-t-4 border-t-[#D99B38] p-8 sm:p-10 shadow-[8px_8px_0px_#1C1917] space-y-6 animate-modal-pop">
         <div className="mx-auto w-20 h-20 rounded-none bg-[#F5F0E6] border-2 border-[#D99B38] flex items-center justify-center text-[#B87D1E] shadow-[3px_3px_0px_#1C1917]">
           <DoorClosed className="w-9 h-9 animate-vn-idle" />
-        </div>
-
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-none bg-[#F5F0E6] border border-stone-300 text-xs font-mono text-stone-700">
-          <Volume2 className="w-4 h-4 text-[#B87D1E] animate-bounce" />
-          <span>[SFX: Passos no corredor + Porta pesada do Tribunal fechando]</span>
         </div>
 
         <p

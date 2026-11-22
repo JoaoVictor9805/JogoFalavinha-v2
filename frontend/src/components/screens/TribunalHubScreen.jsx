@@ -8,7 +8,9 @@ import card5Juarez from '../../assets/juarez/card-5-juarez.jpg'
 import card6Ricardo from '../../assets/ricardo/card-6-ricardo.jpg'
 import card7Ed from '../../assets/ed/card-7-ed.jpg'
 import tribunalMesaImg from '../../assets/outros/tribunal-mesa.webp'
+import { COUNCIL_POP_STAGGER_MS } from '../../context/GameContext'
 import { useGame } from '../../context/gameContextInstance'
+import { getWaxSealByMemberId } from '../../data/waxSealsData'
 import VisualNovelOverlay from '../vn/VisualNovelOverlay'
 
 const MEMBER_CARD_IMAGES = {
@@ -31,12 +33,31 @@ function TribunalHubScreen() {
     openMemberDialog,
     isLocked,
     ceoBriefingDismissed,
+    councilEntranceState,
+    mazeModal,
     actionError,
     clearActionError,
   } = useGame()
 
   const [nowMs, setNowMs] = useState(() => Date.now())
   const hasAnyLocks = Object.keys(memberLocks).length > 0
+
+  const completedIds = challenges
+    .filter((m) => memberProgress[m.id]?.completed)
+    .map((m) => m.id)
+  const completedIdsSignature = completedIds.join(',')
+  const [prevCompletedIds, setPrevCompletedIds] = useState(completedIds)
+  const [recentlyStampedId, setRecentlyStampedId] = useState(null)
+
+  if (completedIdsSignature !== prevCompletedIds.join(',')) {
+    const newlyCompleted = completedIds.find((id) => !prevCompletedIds.includes(id))
+    setPrevCompletedIds(completedIds)
+    if (newlyCompleted) {
+      setRecentlyStampedId(newlyCompleted)
+    } else if (completedIds.length === 0) {
+      setRecentlyStampedId(null)
+    }
+  }
 
   useEffect(() => {
     if (!hasAnyLocks) return undefined
@@ -72,7 +93,7 @@ function TribunalHubScreen() {
       {/* Bancada do Tribunal: 7 painéis verticais estilo Ace Attorney acima das 7 cadeiras */}
       <main className="relative z-10 w-full flex flex-col justify-center">
         <section aria-label="Bancada do Conselho Next" className="max-w-6xl w-full mx-auto">
-          <div className="overflow-x-auto pt-4 pb-2">
+          <div className="overflow-x-auto pt-8 pb-4 px-2">
             <div className="min-w-[940px] w-full flex flex-col items-center">
               {/* Fileira única horizontal de cards brancos, compridos e sem cantos arredondados */}
               <div className="w-[88%] mx-auto grid grid-cols-7 gap-2.5 xl:gap-3 items-stretch relative z-10">
@@ -87,12 +108,23 @@ function TribunalHubScreen() {
                     lockExp && lockExp > nowMs ? Math.max(1, Math.ceil((lockExp - nowMs) / 1000)) : 0
                   const isCoolingDown = !isCompleted && remainingLockSec > 0
                   const cardImage = MEMBER_CARD_IMAGES[member.id]
+                  const waxSeal = getWaxSealByMemberId(member.id)
+                  const isFreshlyStamped =
+                    isCompleted && recentlyStampedId === member.id && !activeMember && !mazeModal
+                  const isEntranceWaiting = councilEntranceState === 'waiting'
+                  const isEntranceAnimating = councilEntranceState === 'animating'
 
                   return (
                     <button
                       key={member.id}
                       type="button"
-                      disabled={isCompleted || isLocked || isCoolingDown}
+                      disabled={
+                        isCompleted ||
+                        isLocked ||
+                        isCoolingDown ||
+                        isEntranceWaiting ||
+                        isEntranceAnimating
+                      }
                       onClick={() => openMemberDialog(member.id)}
                       aria-label={`${member.name} — ${member.role}${
                         isCompleted
@@ -106,10 +138,20 @@ function TribunalHubScreen() {
                           ? `${member.name} · Bloqueado (${remainingLockSec}s)`
                           : `${member.name} · ${member.role}`
                       }
-                      style={{ animationDelay: `${idx * 55}ms` }}
-                      className={`group relative h-[260px] xl:h-[300px] rounded-none border-[3px] p-0 overflow-hidden animate-panel-rise transition-all duration-300 ${
+                      style={
+                        isEntranceAnimating
+                          ? { animationDelay: `${idx * COUNCIL_POP_STAGGER_MS}ms` }
+                          : undefined
+                      }
+                      className={`group relative h-[260px] xl:h-[300px] rounded-none border-[3px] p-0 overflow-hidden transition-all duration-300 ${
+                        isEntranceWaiting
+                          ? 'opacity-0 scale-0 pointer-events-none'
+                          : isEntranceAnimating
+                            ? 'animate-council-pop pointer-events-none'
+                            : ''
+                      } ${
                         isCompleted
-                          ? 'bg-stone-200/75 border-emerald-600/70 opacity-60 cursor-not-allowed pointer-events-none'
+                          ? 'bg-stone-200 border-emerald-700/80 shadow-[3px_3px_0px_rgba(28,25,23,0.45)] cursor-not-allowed pointer-events-none'
                           : isCoolingDown
                             ? 'bg-stone-900 border-red-600 cursor-not-allowed'
                             : `bg-white ${member.borderAccent} shadow-[4px_4px_0px_rgba(28,25,23,0.85)] hover:-translate-y-2.5 hover:shadow-[6px_10px_0px_#1C1917] focus-visible:-translate-y-2 focus-visible:outline-none cursor-pointer`
@@ -122,7 +164,7 @@ function TribunalHubScreen() {
                           draggable={false}
                           className={`block w-full h-full object-cover object-top transition-all duration-500 ${
                             isCompleted
-                              ? 'grayscale contrast-90'
+                              ? 'grayscale opacity-50 contrast-95'
                               : isCoolingDown
                                 ? 'grayscale brightness-50 contrast-110'
                                 : 'saturate-[1.06] contrast-[1.03] group-hover:scale-[1.05] group-hover:saturate-[1.15] group-hover:brightness-[1.03]'
@@ -135,7 +177,7 @@ function TribunalHubScreen() {
                         <span className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out" />
                       )}
 
-                      {/* Overlay de bloqueio temporário (10s após 3 erros) */}
+                      {/* Overlay de bloqueio temporário (20s após 3 erros) */}
                       {isCoolingDown && (
                         <div className="pointer-events-none absolute inset-0 bg-stone-950/65 flex flex-col items-center justify-center gap-2 p-2 text-center">
                           <div className="w-10 h-10 bg-red-600 border-2 border-stone-950 text-white flex items-center justify-center shadow-[2px_2px_0px_#000]">
@@ -157,11 +199,36 @@ function TribunalHubScreen() {
                         </span>
                       )}
 
-                      {/* Selo discreto de conclusão quando o conselheiro aprova */}
+                      {/* Confere verde de aprovação no canto superior esquerdo + Selo de cera no canto inferior direito */}
                       {isCompleted && (
-                        <span className="pointer-events-none absolute top-2 right-2 w-6 h-6 bg-emerald-600 border-2 border-stone-900 text-white flex items-center justify-center shadow-sm">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                        </span>
+                        <>
+                          <span className="pointer-events-none absolute top-2 left-2 z-20 w-6 h-6 bg-emerald-600 border-2 border-stone-900 text-white flex items-center justify-center shadow-sm">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          </span>
+
+                          {waxSeal && (
+                            <span
+                              key={`card-seal-${member.id}-${isFreshlyStamped ? 'fresh' : 'settled'}`}
+                              aria-hidden="true"
+                              className="pointer-events-none select-none absolute bottom-1 right-1 z-20 w-[38%] min-w-[36px] max-w-[46px] aspect-square flex items-center justify-center"
+                            >
+                              <img
+                                src={waxSeal.image}
+                                alt=""
+                                draggable={false}
+                                style={{
+                                  '--seal-tilt': `${waxSeal.cardTiltDeg}deg`,
+                                  transform: isFreshlyStamped
+                                    ? undefined
+                                    : `rotate(${waxSeal.cardTiltDeg}deg)`,
+                                }}
+                                className={`w-full h-full object-contain drop-shadow-[0_3px_6px_rgba(28,25,23,0.48)] ${
+                                  isFreshlyStamped ? 'animate-wax-card-settle' : ''
+                                }`}
+                              />
+                            </span>
+                          )}
+                        </>
                       )}
                     </button>
                   )

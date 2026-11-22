@@ -251,6 +251,26 @@
   animation: mazeEnter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes councilCardPop {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.84);
+  }
+  58% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-council-pop {
+  transform-origin: center bottom;
+  animation: councilCardPop 0.52s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 .pixel-art {
   image-rendering: pixelated;
 }
@@ -276,4 +296,231 @@
   );
   box-shadow: inset 0 0 120px rgba(185, 28, 28, 0.42);
   animation: vnTensionPulse 2s ease-in-out infinite;
+}
+
+/* Quadrinhos de introdução: escalonamento 100% proporcional via container queries */
+.comic-panel-frame {
+  container-type: inline-size;
+}
+
+@keyframes comicBubbleIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-comic-bubble-in {
+  animation: comicBubbleIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.comic-narration-box {
+  background-color: rgba(251, 236, 192, 0.96);
+  color: #1c1917;
+  border: max(1.5px, 0.45cqw) solid #1c1917;
+  border-left: max(3px, 1.1cqw) solid #d99b38;
+  box-shadow: max(2px, 0.85cqw) max(2px, 0.85cqw) 0px rgba(28, 25, 23, 0.92);
+  padding: 1.7cqw 2.4cqw;
+  font-size: 2.95cqw;
+  line-height: 1.28;
+  font-weight: 700;
+}
+
+.comic-speech-bubble {
+  background-color: #ffffff;
+  color: #1c1917;
+  border: max(1.5px, 0.5cqw) solid #1c1917;
+  border-radius: 2.2cqw;
+  box-shadow: max(2px, 0.95cqw) max(2px, 0.95cqw) 0px rgba(28, 25, 23, 0.92);
+  padding: 2cqw 2.7cqw;
+  font-size: 2.95cqw;
+  line-height: 1.28;
+  font-weight: 800;
+}
+
+.comic-speech-tag {
+  font-size: 2.05cqw;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.9cqw;
+}
+
+.comic-tail-bottom {
+  position: absolute;
+  left: 50%;
+  bottom: -1.65cqw;
+  width: 3cqw;
+  height: 3cqw;
+  transform: translateX(-50%) rotate(45deg);
+  background-color: #ffffff;
+  border-right: max(1.5px, 0.5cqw) solid #1c1917;
+  border-bottom: max(1.5px, 0.5cqw) solid #1c1917;
+}
+
+.comic-tail-top-right {
+  position: absolute;
+  right: 16%;
+  top: -1.65cqw;
+  width: 3cqw;
+  height: 3cqw;
+  transform: rotate(45deg);
+  background-color: #ffffff;
+  border-left: max(1.5px, 0.5cqw) solid #1c1917;
+  border-top: max(1.5px, 0.5cqw) solid #1c1917;
+}
+
+/* ================================================================ */
+/* Sistema de Selos de Cera: queda com impacto, anel e screen shake */
+/* ================================================================ */
+@keyframes waxSealSlam {
+  0% {
+    opacity: 0;
+    transform: translate3d(26px, -46px, 0) scale(3.55) rotate(calc(var(--seal-tilt, -7deg) - 20deg));
+    filter: blur(1.4px);
+    animation-timing-function: cubic-bezier(0.55, 0.04, 0.88, 0.32);
+  }
+  16% {
+    opacity: 0.96;
+    filter: blur(0.4px);
+  }
+  38% {
+    opacity: 1;
+    transform: translate3d(0, 3px, 0) scale(0.88) rotate(calc(var(--seal-tilt, -7deg) + 2.8deg));
+    filter: blur(0px);
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  58% {
+    opacity: 1;
+    transform: translate3d(0, -1.5px, 0) scale(1.055) rotate(calc(var(--seal-tilt, -7deg) - 1.2deg));
+    animation-timing-function: ease-out;
+  }
+  78% {
+    opacity: 1;
+    transform: translate3d(0, 0.5px, 0) scale(0.985) rotate(calc(var(--seal-tilt, -7deg) + 0.4deg));
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1) rotate(var(--seal-tilt, -7deg));
+  }
+}
+
+@keyframes waxSealImpactRing {
+  0% {
+    opacity: 0;
+    transform: scale(0.52);
+  }
+  18% {
+    opacity: 0.85;
+    transform: scale(0.86);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.58);
+  }
+}
+
+@keyframes waxScreenShake {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  16% {
+    transform: translate3d(-5px, 4px, 0);
+  }
+  34% {
+    transform: translate3d(5px, -3px, 0);
+  }
+  54% {
+    transform: translate3d(-3px, 2px, 0);
+  }
+  74% {
+    transform: translate3d(2px, -1px, 0);
+  }
+  90% {
+    transform: translate3d(-1px, 0.5px, 0);
+  }
+}
+
+@keyframes waxCardSettle {
+  0% {
+    transform: scale(1.32) rotate(calc(var(--seal-tilt, -6deg) - 10deg));
+    filter: drop-shadow(0 0 18px rgba(217, 155, 56, 0.85));
+  }
+  55% {
+    transform: scale(0.94) rotate(calc(var(--seal-tilt, -6deg) + 2deg));
+  }
+  100% {
+    transform: scale(1) rotate(var(--seal-tilt, -6deg));
+    filter: drop-shadow(0 4px 8px rgba(28, 25, 23, 0.45));
+  }
+}
+
+@keyframes waxTabPulse {
+  0%, 100% {
+    transform: translateX(0) scale(1);
+    box-shadow: -4px 4px 0px #1C1917;
+  }
+  25% {
+    transform: translateX(-5px) scale(1.04);
+    box-shadow: -6px 6px 0px #1C1917, 0 0 18px rgba(217, 155, 56, 0.65);
+  }
+  55% {
+    transform: translateX(-2px) scale(1.02);
+    box-shadow: -5px 5px 0px #1C1917, 0 0 12px rgba(217, 155, 56, 0.4);
+  }
+}
+
+.animate-wax-seal-slam {
+  will-change: transform, opacity;
+  animation: waxSealSlam 0.44s both;
+}
+
+.animate-wax-impact-ring {
+  will-change: transform, opacity;
+  animation: waxSealImpactRing 0.44s ease-out 0.165s both;
+}
+
+.animate-wax-screen-shake {
+  will-change: transform;
+  animation: waxScreenShake 0.22s cubic-bezier(0.36, 0.07, 0.19, 0.97) 0.165s both;
+}
+
+.animate-wax-card-settle {
+  will-change: transform;
+  animation: waxCardSettle 0.48s cubic-bezier(0.18, 1.2, 0.35, 1) both;
+}
+
+.animate-wax-tab-pulse {
+  animation: waxTabPulse 0.72s cubic-bezier(0.22, 1, 0.36, 1) 2;
+}
+
+@keyframes mazeErrorFlash {
+  0%, 100% {
+    box-shadow: inset 0 0 28px rgba(220, 38, 38, 0.14);
+    background-color: rgba(220, 38, 38, 0.02);
+  }
+  50% {
+    box-shadow: inset 0 0 88px rgba(220, 38, 38, 0.56);
+    background-color: rgba(220, 38, 38, 0.14);
+  }
+}
+
+.animate-maze-error-flash {
+  animation: mazeErrorFlash 0.65s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-wax-seal-slam,
+  .animate-wax-impact-ring,
+  .animate-wax-screen-shake,
+  .animate-wax-card-settle,
+  .animate-wax-tab-pulse,
+  .animate-maze-error-flash {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

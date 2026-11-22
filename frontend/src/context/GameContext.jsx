@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   COUNCIL_MEMBERS,
+  estimateSpeechTypingMs,
   pickErrorDialogue,
   pickOpeningGreeting,
 } from '../data/conselhoNextData'
 import { apiService } from '../services/apiService'
 import {
   playApprovalSound,
+  playCouncilPopSound,
   playPenaltySound,
   playSelectSound,
   playVictorySound,
@@ -15,7 +17,15 @@ import { GameContext } from './gameContextInstance'
 
 const LEGACY_PLAYER_STORAGE_KEY = 'conselho_next_last_player_v2'
 const OPTION_LABELS = ['a)', 'b)', 'c)', 'd)']
-const FEEDBACK_READING_MS = 3500
+const BLOCKED_READING_MS = 3500
+const MIN_APPROVAL_READING_MS = 2500
+const POST_SPEECH_PAUSE_MS = 1000
+const POST_SKIP_GRACE_MS = 800
+const MAX_APPROVAL_CROSSTALK_PER_MATCH = 2
+export const COUNCIL_POP_STAGGER_MS = 300
+const COUNCIL_POP_DURATION_MS = 780
+const COUNCIL_POP_SETTLE_MS = 420
+const COUNCIL_IMPACT_SOUND_OFFSET_MS = 135
 
 // Flag de teste para animação 3D de erro (telefone tocando) na reprovação após 3 erros
 export const ENABLE_3D_ERROR_ANIMATION = true
@@ -24,7 +34,7 @@ function shuffleOptionsList(options = []) {
   const list = [...options]
   for (let i = list.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1))
-    ;[list[i], list[j]] = [list[j], list[i]]
+      ;[list[i], list[j]] = [list[j], list[i]]
   }
   return list.map((opt, idx) => ({
     ...opt,
@@ -87,13 +97,13 @@ function buildProgressFromPartida(partida, membersList = COUNCIL_MEMBERS) {
 function buildLocksFromPartida(partida) {
   const locks = {}
   const now = Date.now()
-  ;(partida?.bloqueios || []).forEach((b) => {
-    if (!b?.bloqueadoAte) return
-    const ts = new Date(b.bloqueadoAte).getTime()
-    if (Number.isFinite(ts) && ts > now) {
-      locks[b.membroId] = ts
-    }
-  })
+    ; (partida?.bloqueios || []).forEach((b) => {
+      if (!b?.bloqueadoAte) return
+      const ts = new Date(b.bloqueadoAte).getTime()
+      if (Number.isFinite(ts) && ts > now) {
+        locks[b.membroId] = ts
+      }
+    })
   return locks
 }
 
@@ -123,6 +133,7 @@ export function GameProvider({ children }) {
 
   // Cronômetro global em segundos reais, penalidades e bônus de combo/invicto
   const [isTimerRunning, setIsTimerRunning] = useState(false)
+  const [isTimerPausedForApproval, setIsTimerPausedForApproval] = useState(false)
   const [realSeconds, setRealSeconds] = useState(0)
   const [penaltySeconds, setPenaltySeconds] = useState(0)
   const [bonusSeconds, setBonusSeconds] = useState(0)
@@ -131,7 +142,7 @@ export function GameProvider({ children }) {
   const [penaltyAlert, setPenaltyAlert] = useState({ key: 0, seconds: 5 })
   const [comboAlert, setComboAlert] = useState({ key: 0, seconds: 0, label: '' })
 
-  // Estado dos 7 conselheiros, bloqueios temporários (10s), Overlay VN e Modal 3D
+  // Estado dos 7 conselheiros, bloqueios temporários (20s), Overlay VN e Modal 3D
   const [memberProgress, setMemberProgress] = useState(() =>
     createInitialMemberProgress(COUNCIL_MEMBERS)
   )
@@ -139,11 +150,13 @@ export function GameProvider({ children }) {
   const [activeMemberId, setActiveMemberId] = useState(null)
   const [vnFeedback, setVnFeedback] = useState('idle') // 'idle' | 'wrong' | 'blocked' | 'approved'
   const [vnApprovalMessage, setVnApprovalMessage] = useState('')
+  const [approvalReadingState, setApprovalReadingState] = useState(null)
   const [vnSpeechText, setVnSpeechText] = useState('')
   const [vnSpeechKey, setVnSpeechKey] = useState(0)
   const [vnErrorStep, setVnErrorStep] = useState(0)
   const [isLocked, setIsLocked] = useState(false)
   const [ceoBriefingDismissed, setCeoBriefingDismissed] = useState(false)
+  const [councilEntranceState, setCouncilEntranceState] = useState('done') // 'waiting' | 'animating' | 'done'
   const [mazeModal, setMazeModal] = useState(null)
   const [screenFadePhase, setScreenFadePhase] = useState('idle') // 'idle' | 'fade-to-black' | 'fade-from-black'
 
@@ -153,6 +166,15 @@ export function GameProvider({ children }) {
 
   const lockRef = useRef(false)
   const timersRef = useRef([])
+  const approvalTimeoutRef = useRef(null)
+  const approvalSafetyTimeoutRef = useRef(null)
+  const pendingApprovalRef = useRef(null)
+  const crossTalkHistoryRef = useRef({
+    citedMemberIds: [],
+    chairHadCrossTalk: {},
+    approvalCrossTalkCount: 0,
+    lastOpeningWasCrossTalk: false,
+  })
   const stateSnapshotRef = useRef({
     realSeconds: 0,
     penaltySeconds: 0,
@@ -186,6 +208,40 @@ export function GameProvider({ children }) {
     vnSpeechText,
   ])
 
+  const resetCrossTalkHistory = useCallback(() => {
+    crossTalkHistoryRef.current = {
+      citedMemberIds: [],
+      chairHadCrossTalk: {},
+      approvalCrossTalkCount: 0,
+      lastOpeningWasCrossTalk: false,
+    }
+  }, [])
+
+  const recordCrossTalkUsage = useCallback((memberId, citedMemberId, { isApproval = false } = {}) => {
+    const hist = crossTalkHistoryRef.current
+    if (memberId) {
+      hist.chairHadCrossTalk[memberId] = true
+    }
+    if (citedMemberId) {
+      hist.citedMemberIds = [...hist.citedMemberIds, Number(citedMemberId)]
+    }
+    if (isApproval) {
+      hist.approvalCrossTalkCount += 1
+    }
+  }, [])
+
+  const clearApprovalTimers = useCallback(() => {
+    if (approvalTimeoutRef.current) {
+      clearTimeout(approvalTimeoutRef.current)
+      approvalTimeoutRef.current = null
+    }
+    if (approvalSafetyTimeoutRef.current) {
+      clearTimeout(approvalSafetyTimeoutRef.current)
+      approvalSafetyTimeoutRef.current = null
+    }
+    pendingApprovalRef.current = null
+  }, [])
+
   const registerTimeout = useCallback((fn, delay) => {
     const id = setTimeout(fn, delay)
     timersRef.current.push(id)
@@ -195,7 +251,8 @@ export function GameProvider({ children }) {
   const clearAllTimeouts = useCallback(() => {
     timersRef.current.forEach((id) => clearTimeout(id))
     timersRef.current = []
-  }, [])
+    clearApprovalTimers()
+  }, [clearApprovalTimers])
 
   useEffect(() => {
     return () => clearAllTimeouts()
@@ -205,6 +262,7 @@ export function GameProvider({ children }) {
   const handleUnauthorizedSession = useCallback(
     (message) => {
       clearAllTimeouts()
+      resetCrossTalkHistory()
       clearLegacyPlayerStorage()
       lockRef.current = false
       setIsLocked(false)
@@ -212,6 +270,7 @@ export function GameProvider({ children }) {
       setPlayer(null)
       setActivePartida(null)
       setIsTimerRunning(false)
+      setIsTimerPausedForApproval(false)
       setRealSeconds(0)
       setPenaltySeconds(0)
       setBonusSeconds(0)
@@ -224,9 +283,11 @@ export function GameProvider({ children }) {
       setActiveMemberId(null)
       setVnFeedback('idle')
       setVnApprovalMessage('')
+      setApprovalReadingState(null)
       setVnSpeechText('')
       setVnErrorStep(0)
       setCeoBriefingDismissed(false)
+      setCouncilEntranceState('waiting')
       setMazeModal(null)
       setPlayerHistory({ totalTentativas: 0, melhorPartida: null, tentativas: [] })
       setRankingHistory([])
@@ -236,7 +297,7 @@ export function GameProvider({ children }) {
       setAuthError(message || 'Sua sessão expirou ou foi encerrada. Faça login novamente.')
       setScreen('REGISTRATION')
     },
-    [clearAllTimeouts]
+    [clearAllTimeouts, resetCrossTalkHistory]
   )
 
   const recarregarRankings = useCallback(async () => {
@@ -323,6 +384,7 @@ export function GameProvider({ children }) {
         const partida = sessao.partidaEmAndamento
         if (partida && partida.status === 'EM_ANDAMENTO') {
           const jaIniciouCronometro = Boolean(partida.cronometroIniciadoEm)
+          resetCrossTalkHistory()
           setActivePartida(partida)
           setMemberProgress(buildProgressFromPartida(partida, shuffled))
           setMemberLocks(buildLocksFromPartida(partida))
@@ -334,16 +396,33 @@ export function GameProvider({ children }) {
           setActiveMemberId(null)
           setVnFeedback('idle')
           setVnApprovalMessage('')
+          setApprovalReadingState(null)
           setVnSpeechText('')
           setVnErrorStep(0)
           setMazeModal(null)
           setJustFinished(false)
           setCeoBriefingDismissed(jaIniciouCronometro)
+          setCouncilEntranceState(jaIniciouCronometro ? 'done' : 'waiting')
+          setIsTimerPausedForApproval(false)
           setIsTimerRunning(jaIniciouCronometro)
           setScreen('TRIBUNAL_HUB')
+
+          if (jaIniciouCronometro && partida.pausadoDesde) {
+            apiService
+              .retomarCronometro(partida.id)
+              .then((res) => {
+                if (typeof res?.segundosReais === 'number') {
+                  setRealSeconds((prev) => Math.max(prev, res.segundosReais))
+                }
+              })
+              .catch(() => { })
+          }
         } else {
+          resetCrossTalkHistory()
           setActivePartida(null)
           setIsTimerRunning(false)
+          setIsTimerPausedForApproval(false)
+          setApprovalReadingState(null)
           setMemberProgress(createInitialMemberProgress(shuffled))
           setMemberLocks({})
           setVnApprovalMessage('')
@@ -363,20 +442,25 @@ export function GameProvider({ children }) {
     return () => {
       cancelled = true
     }
-  }, [carregarDesafiosAutenticado, carregarHistoricoTentativas, recarregarRankings])
+  }, [
+    carregarDesafiosAutenticado,
+    carregarHistoricoTentativas,
+    recarregarRankings,
+    resetCrossTalkHistory,
+  ])
 
-  // Cronômetro global em segundo plano
+  // Cronômetro global em segundo plano (pausa durante a fala final de aprovação)
   useEffect(() => {
-    if (!isTimerRunning) return undefined
+    if (!isTimerRunning || isTimerPausedForApproval) return undefined
 
     const interval = setInterval(() => {
       setRealSeconds((prev) => prev + 1)
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [isTimerRunning])
+  }, [isTimerRunning, isTimerPausedForApproval])
 
-  // Limpa automaticamente bloqueios de 10s expirados
+  // Limpa automaticamente bloqueios de 20s expirados
   const hasActiveLocks = Object.keys(memberLocks).length > 0
   useEffect(() => {
     if (!hasActiveLocks) return undefined
@@ -402,7 +486,7 @@ export function GameProvider({ children }) {
 
   // Sincronização periódica com o relógio oficial do servidor a cada 10 segundos
   useEffect(() => {
-    if (!isTimerRunning || !activePartida?.id) return undefined
+    if (!isTimerRunning || isTimerPausedForApproval || !activePartida?.id) return undefined
 
     const syncInterval = setInterval(() => {
       apiService
@@ -420,7 +504,7 @@ export function GameProvider({ children }) {
     }, 10000)
 
     return () => clearInterval(syncInterval)
-  }, [isTimerRunning, activePartida?.id, handleUnauthorizedSession])
+  }, [isTimerRunning, isTimerPausedForApproval, activePartida?.id, handleUnauthorizedSession])
 
   const totalSeconds = Math.max(
     realSeconds === 0 && penaltySeconds === 0 && bonusSeconds === 0 ? 0 : 1,
@@ -452,7 +536,7 @@ export function GameProvider({ children }) {
   }, [])
 
   const triggerBlackoutTransition = useCallback(
-    (middleAction) => {
+    (middleAction, { onFadeComplete, keepLockedAfterFade = false } = {}) => {
       setScreenFadePhase('fade-to-black')
       lockRef.current = true
       setIsLocked(true)
@@ -465,8 +549,13 @@ export function GameProvider({ children }) {
 
         registerTimeout(() => {
           setScreenFadePhase('idle')
-          lockRef.current = false
-          setIsLocked(false)
+          if (!keepLockedAfterFade) {
+            lockRef.current = false
+            setIsLocked(false)
+          }
+          if (typeof onFadeComplete === 'function') {
+            onFadeComplete()
+          }
         }, 500)
       }, 500)
     },
@@ -483,6 +572,7 @@ export function GameProvider({ children }) {
 
       try {
         clearAllTimeouts()
+        resetCrossTalkHistory()
 
         const cadRes = await apiService.cadastrar({
           nome: formData.nome,
@@ -514,9 +604,12 @@ export function GameProvider({ children }) {
         setActiveMemberId(null)
         setVnFeedback('idle')
         setVnApprovalMessage('')
+        setApprovalReadingState(null)
         setCeoBriefingDismissed(false)
+        setCouncilEntranceState('waiting')
         setMazeModal(null)
         setIsTimerRunning(false)
+        setIsTimerPausedForApproval(false)
         setJustFinished(false)
         setScreen('COMIC_INTRO')
       } catch (err) {
@@ -527,7 +620,7 @@ export function GameProvider({ children }) {
         setIsLocked(false)
       }
     },
-    [carregarDesafiosAutenticado, clearAllTimeouts]
+    [carregarDesafiosAutenticado, clearAllTimeouts, resetCrossTalkHistory]
   )
 
   // 1B. Iniciar ou Retomar jogo através do LOGIN
@@ -540,6 +633,7 @@ export function GameProvider({ children }) {
 
       try {
         clearAllTimeouts()
+        resetCrossTalkHistory()
 
         const loginRes = await apiService.login({
           email: loginData.email,
@@ -572,16 +666,31 @@ export function GameProvider({ children }) {
           setActiveMemberId(null)
           setVnFeedback('idle')
           setVnApprovalMessage('')
+          setApprovalReadingState(null)
           setVnSpeechText('')
           setVnErrorStep(0)
           setMazeModal(null)
           setJustFinished(false)
           setCeoBriefingDismissed(jaIniciouCronometro)
+          setCouncilEntranceState(jaIniciouCronometro ? 'done' : 'waiting')
+          setIsTimerPausedForApproval(false)
           setIsTimerRunning(jaIniciouCronometro)
           setScreen('TRIBUNAL_HUB')
+
+          if (jaIniciouCronometro && partida.pausadoDesde) {
+            apiService
+              .retomarCronometro(partida.id)
+              .then((res) => {
+                if (typeof res?.segundosReais === 'number') {
+                  setRealSeconds((prev) => Math.max(prev, res.segundosReais))
+                }
+              })
+              .catch(() => { })
+          }
         } else {
           setActivePartida(null)
           setIsTimerRunning(false)
+          setIsTimerPausedForApproval(false)
           setRealSeconds(0)
           setPenaltySeconds(0)
           setBonusSeconds(0)
@@ -594,6 +703,7 @@ export function GameProvider({ children }) {
           setActiveMemberId(null)
           setVnFeedback('idle')
           setVnApprovalMessage('')
+          setApprovalReadingState(null)
           setCeoBriefingDismissed(false)
           setMazeModal(null)
           setJustFinished(false)
@@ -607,7 +717,13 @@ export function GameProvider({ children }) {
         setIsLocked(false)
       }
     },
-    [carregarDesafiosAutenticado, carregarHistoricoTentativas, clearAllTimeouts, recarregarRankings]
+    [
+      carregarDesafiosAutenticado,
+      carregarHistoricoTentativas,
+      clearAllTimeouts,
+      recarregarRankings,
+      resetCrossTalkHistory,
+    ]
   )
 
   // Abre o modal 3D de apresentação após o CEO explicar as regras
@@ -618,47 +734,81 @@ export function GameProvider({ children }) {
     })
   }, [triggerBlackoutTransition])
 
-  // Confirma "OK" no modal inicial do labirinto: garante largada registrada no servidor antes de iniciar
-  const confirmIntroMazeAndStart = useCallback(async () => {
+  // Confirma "OK" no modal inicial do labirinto:
+  // 1) Revela a sala vazia do Tribunal
+  // 2) Dispara a animação em cascata dos 7 conselheiros (esquerda → direita)
+  // 3) Assim que todos pousam na bancada, registra a largada oficial do cronômetro no servidor
+  const confirmIntroMazeAndStart = useCallback(() => {
     if (lockRef.current) return
     playSelectSound()
     setActionError('')
     const partidaId = stateSnapshotRef.current.activePartida?.id
+    const memberCount = stateSnapshotRef.current.challenges?.length || 7
+    const totalEntranceMs =
+      Math.max(0, memberCount - 1) * COUNCIL_POP_STAGGER_MS +
+      COUNCIL_POP_DURATION_MS +
+      COUNCIL_POP_SETTLE_MS
 
-    if (partidaId) {
-      lockRef.current = true
-      setIsLocked(true)
-      try {
-        const res = await apiService.iniciarCronometro(partidaId)
-        if (typeof res?.segundosReais === 'number') {
-          setRealSeconds(res.segundosReais)
-        }
-        setActivePartida((prev) =>
-          prev
-            ? { ...prev, cronometroIniciadoEm: res?.cronometroIniciadoEm || prev.cronometroIniciadoEm }
-            : prev
-        )
-      } catch (err) {
-        if (err?.status === 401) {
-          handleUnauthorizedSession(err.message)
-          return
-        }
-        console.warn('[GameContext] Falha ao registrar início do cronômetro:', err)
-        setActionError(
-          err?.message || 'Não foi possível iniciar o cronômetro no servidor. Tente novamente.'
-        )
-        lockRef.current = false
-        setIsLocked(false)
-        return
+    triggerBlackoutTransition(
+      () => {
+        setMazeModal(null)
+        setCeoBriefingDismissed(true)
+        setCouncilEntranceState('waiting')
+        setIsTimerRunning(false)
+      },
+      {
+        keepLockedAfterFade: true,
+        onFadeComplete: () => {
+          setCouncilEntranceState('animating')
+
+          for (let i = 0; i < memberCount; i += 1) {
+            registerTimeout(() => {
+              playCouncilPopSound(i, memberCount)
+            }, i * COUNCIL_POP_STAGGER_MS + COUNCIL_IMPACT_SOUND_OFFSET_MS)
+          }
+
+          registerTimeout(async () => {
+            if (partidaId) {
+              try {
+                const res = await apiService.iniciarCronometro(partidaId)
+                if (typeof res?.segundosReais === 'number') {
+                  setRealSeconds(res.segundosReais)
+                }
+                setActivePartida((prev) =>
+                  prev
+                    ? {
+                      ...prev,
+                      cronometroIniciadoEm:
+                        res?.cronometroIniciadoEm || prev.cronometroIniciadoEm,
+                    }
+                    : prev
+                )
+              } catch (err) {
+                if (err?.status === 401) {
+                  handleUnauthorizedSession(err.message)
+                  return
+                }
+                console.warn('[GameContext] Falha ao registrar início do cronômetro:', err)
+                setActionError(
+                  err?.message ||
+                  'Não foi possível iniciar o cronômetro no servidor. Atualize a página e tente novamente.'
+                )
+                setCouncilEntranceState('done')
+                lockRef.current = false
+                setIsLocked(false)
+                return
+              }
+            }
+
+            setCouncilEntranceState('done')
+            setIsTimerRunning(true)
+            lockRef.current = false
+            setIsLocked(false)
+          }, totalEntranceMs)
+        },
       }
-    }
-
-    triggerBlackoutTransition(() => {
-      setMazeModal(null)
-      setCeoBriefingDismissed(true)
-      setIsTimerRunning(true)
-    })
-  }, [handleUnauthorizedSession, triggerBlackoutTransition])
+    )
+  }, [handleUnauthorizedSession, registerTimeout, triggerBlackoutTransition])
 
   // Abre o modal do mapa manualmente (sem fade para preto)
   const openManualMazeModal = useCallback(() => {
@@ -708,6 +858,143 @@ export function GameProvider({ children }) {
     setScreen('TRIBUNAL_HUB')
   }, [])
 
+  // Finaliza a exibição da aprovação, retoma o cronômetro (visual e servidor) e abre o modal 3D
+  const completeApprovalTransition = useCallback(() => {
+    const pending = pendingApprovalRef.current
+    if (!pending || pending.completed) return
+    pending.completed = true
+
+    if (approvalTimeoutRef.current) {
+      clearTimeout(approvalTimeoutRef.current)
+      approvalTimeoutRef.current = null
+    }
+    if (approvalSafetyTimeoutRef.current) {
+      clearTimeout(approvalSafetyTimeoutRef.current)
+      approvalSafetyTimeoutRef.current = null
+    }
+    pendingApprovalRef.current = null
+
+    const { member, resultado, partidaId } = pending
+    const snapshot = stateSnapshotRef.current
+    const prevCompleted = Object.values(snapshot.memberProgress).filter(
+      (item) => item.completed
+    ).length
+
+    const nextProgress = {
+      ...snapshot.memberProgress,
+      [member.id]: {
+        ...snapshot.memberProgress[member.id],
+        completed: true,
+      },
+    }
+
+    setMemberProgress(nextProgress)
+    setActiveMemberId(null)
+    setVnFeedback('idle')
+    setVnApprovalMessage('')
+    setApprovalReadingState(null)
+    setVnSpeechText('')
+    setVnErrorStep(0)
+    setActivePartida(resultado.partida)
+
+    const allCompleted = resultado.jogoConcluido
+    const nextCompleted = resultado.etapaAtual || prevCompleted + 1
+
+    if (allCompleted) {
+      setIsTimerRunning(false)
+      setIsTimerPausedForApproval(false)
+      playVictorySound()
+      recarregarRankings()
+      carregarHistoricoTentativas()
+
+      setMazeModal({
+        mode: 'progress',
+        fromStep: prevCompleted,
+        toStep: nextCompleted,
+        memberName: member.name,
+        isFinal: true,
+      })
+    } else {
+      setIsTimerPausedForApproval(false)
+      if (partidaId) {
+        apiService
+          .retomarCronometro(partidaId)
+          .then((res) => {
+            if (typeof res?.segundosReais === 'number') {
+              setRealSeconds((prev) => Math.max(prev, res.segundosReais))
+            }
+          })
+          .catch((err) => {
+            if (err?.status === 401) {
+              handleUnauthorizedSession(err.message)
+            }
+          })
+      }
+
+      setMazeModal({
+        mode: 'progress',
+        fromStep: prevCompleted,
+        toStep: nextCompleted,
+        memberName: member.name,
+        isFinal: false,
+      })
+    }
+
+    lockRef.current = false
+    setIsLocked(false)
+  }, [carregarHistoricoTentativas, handleUnauthorizedSession, recarregarRankings])
+
+  const scheduleApprovalClose = useCallback(
+    (remainingMs, { skipped = false, speechFinished = false } = {}) => {
+      const pending = pendingApprovalRef.current
+      if (!pending || pending.completed) return
+
+      if (approvalTimeoutRef.current) {
+        clearTimeout(approvalTimeoutRef.current)
+        approvalTimeoutRef.current = null
+      }
+
+      const safeRemaining = Math.max(150, Math.round(remainingMs))
+      const now = Date.now()
+      setApprovalReadingState((prev) =>
+        prev
+          ? {
+            ...prev,
+            targetEndAt: now + safeRemaining,
+            skipped: prev.skipped || skipped,
+            speechFinished: prev.speechFinished || speechFinished,
+          }
+          : null
+      )
+
+      approvalTimeoutRef.current = setTimeout(() => {
+        completeApprovalTransition()
+      }, safeRemaining)
+    },
+    [completeApprovalTransition]
+  )
+
+  const notifyApprovalSpeechSkipped = useCallback(() => {
+    const pending = pendingApprovalRef.current
+    if (!pending || pending.completed || pending.skipped) return
+
+    pending.skipped = true
+    pending.finishScheduled = true
+    const elapsed = Date.now() - pending.startedAt
+    const remainingMs = Math.max(MIN_APPROVAL_READING_MS - elapsed, POST_SKIP_GRACE_MS)
+    scheduleApprovalClose(remainingMs, { skipped: true, speechFinished: true })
+  }, [scheduleApprovalClose])
+
+  const notifyApprovalSpeechFinished = useCallback(() => {
+    const pending = pendingApprovalRef.current
+    if (!pending || pending.completed || pending.finishScheduled) return
+
+    pending.finishScheduled = true
+    const elapsed = Date.now() - pending.startedAt
+    const remainingMs = Math.max(MIN_APPROVAL_READING_MS - elapsed, POST_SPEECH_PAUSE_MS)
+    scheduleApprovalClose(remainingMs, { speechFinished: true })
+  }, [scheduleApprovalClose])
+
   // Selecionar um membro no Tribunal
   const openMemberDialog = useCallback(
     (memberId) => {
@@ -730,32 +1017,47 @@ export function GameProvider({ children }) {
         .filter((m) => !memberProgress[m.id]?.completed && m.id !== memberId)
         .map((m) => m.id)
 
-      const initialSpeech =
+      const hist = crossTalkHistoryRef.current
+      const allowChairCrossTalk = !hist.chairHadCrossTalk[memberId]
+
+      const speechPick =
         status.errors > 0
           ? pickErrorDialogue({
-              memberId,
-              errorNumber: status.errors,
-              isBlocked: false,
-              completedMemberIds,
-              remainingMemberIds,
-            })
+            memberId,
+            errorNumber: status.errors,
+            isBlocked: false,
+            completedMemberIds,
+            remainingMemberIds,
+            citedMemberIds: hist.citedMemberIds,
+            allowCrossTalk: allowChairCrossTalk,
+          })
           : pickOpeningGreeting({
-              memberId,
-              defaultGreeting: member?.greeting || '',
-              completedMemberIds,
-              totalMembers: challenges.length || 7,
-            })
+            memberId,
+            defaultGreeting: member?.greeting || '',
+            completedMemberIds,
+            citedMemberIds: hist.citedMemberIds,
+            allowCrossTalk: allowChairCrossTalk && !hist.lastOpeningWasCrossTalk,
+            totalMembers: challenges.length || 7,
+          })
+
+      if (status.errors === 0) {
+        hist.lastOpeningWasCrossTalk = Boolean(speechPick.usedCrossTalk)
+      }
+      if (speechPick.usedCrossTalk) {
+        recordCrossTalkUsage(memberId, speechPick.citedMemberId)
+      }
 
       playSelectSound()
       setActionError('')
       setVnFeedback('idle')
       setVnApprovalMessage('')
+      setApprovalReadingState(null)
       setVnErrorStep(status.errors || 0)
-      setVnSpeechText(initialSpeech || member?.greeting || '')
+      setVnSpeechText(speechPick.text || member?.greeting || '')
       setVnSpeechKey((prev) => prev + 1)
       setActiveMemberId(memberId)
     },
-    [challenges, memberLocks, memberProgress]
+    [challenges, memberLocks, memberProgress, recordCrossTalkUsage]
   )
 
   const closeMemberDialog = useCallback(() => {
@@ -764,6 +1066,7 @@ export function GameProvider({ children }) {
     setActionError('')
     setVnFeedback('idle')
     setVnApprovalMessage('')
+    setApprovalReadingState(null)
     setVnSpeechText('')
     setVnErrorStep(0)
     setActiveMemberId(null)
@@ -789,9 +1092,17 @@ export function GameProvider({ children }) {
       setIsLocked(true)
 
       try {
+        const hist = crossTalkHistoryRef.current
+        const evitarCruzadaNaAprovacao = Boolean(
+          hist.chairHadCrossTalk[memberId] ||
+          hist.approvalCrossTalkCount >= MAX_APPROVAL_CROSSTALK_PER_MATCH
+        )
+
         const resultado = await apiService.validarResposta(partidaId, {
           membroId: memberId,
           opcaoId: optionId,
+          membrosJaCitados: hist.citedMemberIds,
+          evitarCruzada: evitarCruzadaNaAprovacao,
         })
 
         if (typeof resultado.segundosReais === 'number') {
@@ -801,6 +1112,53 @@ export function GameProvider({ children }) {
         if (resultado.acertou) {
           playApprovalSound()
           const approvalMsg = resultado.mensagemAprovacao || ''
+
+          if (resultado.usouCruzada || resultado.citouMembroId) {
+            recordCrossTalkUsage(member.id, resultado.citouMembroId, { isApproval: true })
+          }
+
+          if (resultado.jogoConcluido) {
+            setIsTimerRunning(false)
+            setIsTimerPausedForApproval(false)
+          } else {
+            setIsTimerPausedForApproval(true)
+          }
+
+          const now = Date.now()
+          const expectedDurationMs =
+            typeof resultado.duracaoLeituraMs === 'number' &&
+              resultado.duracaoLeituraMs >= MIN_APPROVAL_READING_MS
+              ? resultado.duracaoLeituraMs
+              : Math.max(
+                MIN_APPROVAL_READING_MS,
+                estimateSpeechTypingMs(approvalMsg) + POST_SPEECH_PAUSE_MS
+              )
+
+          clearApprovalTimers()
+          pendingApprovalRef.current = {
+            member,
+            resultado,
+            partidaId,
+            startedAt: now,
+            expectedDurationMs,
+            skipped: false,
+            finishScheduled: false,
+            completed: false,
+          }
+          setApprovalReadingState({
+            key: now,
+            startedAt: now,
+            targetEndAt: now + expectedDurationMs,
+            expectedDurationMs,
+            skipped: false,
+            speechFinished: false,
+          })
+
+          // Timeout de segurança caso a aba em segundo plano atrase o typewriter
+          approvalSafetyTimeoutRef.current = setTimeout(() => {
+            completeApprovalTransition()
+          }, expectedDurationMs + 2500)
+
           setVnApprovalMessage(approvalMsg)
           setVnSpeechText(approvalMsg)
           setVnSpeechKey((prev) => prev + 1)
@@ -833,58 +1191,6 @@ export function GameProvider({ children }) {
               label: 'COMBO x3! -5s',
             }))
           }
-
-          registerTimeout(() => {
-            const snapshot = stateSnapshotRef.current
-            const prevCompleted = Object.values(snapshot.memberProgress).filter(
-              (item) => item.completed
-            ).length
-
-            const nextProgress = {
-              ...snapshot.memberProgress,
-              [member.id]: {
-                ...snapshot.memberProgress[member.id],
-                completed: true,
-              },
-            }
-
-            setMemberProgress(nextProgress)
-            setActiveMemberId(null)
-            setVnFeedback('idle')
-            setVnApprovalMessage('')
-            setVnSpeechText('')
-            setVnErrorStep(0)
-            setActivePartida(resultado.partida)
-
-            const allCompleted = resultado.jogoConcluido
-            const nextCompleted = resultado.etapaAtual || prevCompleted + 1
-
-            if (allCompleted) {
-              setIsTimerRunning(false)
-              playVictorySound()
-              recarregarRankings()
-              carregarHistoricoTentativas()
-
-              setMazeModal({
-                mode: 'progress',
-                fromStep: prevCompleted,
-                toStep: nextCompleted,
-                memberName: member.name,
-                isFinal: true,
-              })
-            } else {
-              setMazeModal({
-                mode: 'progress',
-                fromStep: prevCompleted,
-                toStep: nextCompleted,
-                memberName: member.name,
-                isFinal: false,
-              })
-            }
-
-            lockRef.current = false
-            setIsLocked(false)
-          }, FEEDBACK_READING_MS)
         } else {
           playPenaltySound()
           const appliedPenalty = resultado.penalidade || 5
@@ -902,19 +1208,27 @@ export function GameProvider({ children }) {
             .filter((m) => !stateSnapshotRef.current.memberProgress[m.id]?.completed && m.id !== member.id)
             .map((m) => m.id)
 
+          const allowChairCrossTalk = !crossTalkHistoryRef.current.chairHadCrossTalk[member.id]
+
           if (resultado.reprovado) {
             const lockUntilMs = resultado.bloqueadoAte
               ? new Date(resultado.bloqueadoAte).getTime()
-              : Date.now() + (resultado.bloqueioSegundos || 10) * 1000
+              : Date.now() + (resultado.bloqueioSegundos || 20) * 1000
 
-            const blockSpeech = pickErrorDialogue({
+            const blockPick = pickErrorDialogue({
               memberId: member.id,
               errorNumber: 3,
               isBlocked: true,
               completedMemberIds,
               remainingMemberIds,
+              citedMemberIds: crossTalkHistoryRef.current.citedMemberIds,
               lastSpeech: stateSnapshotRef.current.vnSpeechText,
+              allowCrossTalk: allowChairCrossTalk,
             })
+
+            if (blockPick.usedCrossTalk) {
+              recordCrossTalkUsage(member.id, blockPick.citedMemberId)
+            }
 
             setMemberLocks((prev) => ({
               ...prev,
@@ -938,7 +1252,7 @@ export function GameProvider({ children }) {
             })
 
             setVnErrorStep(3)
-            setVnSpeechText(blockSpeech)
+            setVnSpeechText(blockPick.text)
             setVnSpeechKey((prev) => prev + 1)
             setVnFeedback('blocked')
 
@@ -976,20 +1290,26 @@ export function GameProvider({ children }) {
                   fromStep: done,
                   toStep: done,
                   memberName: member.name,
-                  lockSeconds: resultado.bloqueioSegundos || 10,
+                  lockSeconds: resultado.bloqueioSegundos || 20,
                 })
               }
-            }, FEEDBACK_READING_MS)
+            }, BLOCKED_READING_MS)
           } else {
             const nextErrorNumber = (progress.errors || 0) + 1
-            const errorSpeech = pickErrorDialogue({
+            const errorPick = pickErrorDialogue({
               memberId: member.id,
               errorNumber: nextErrorNumber,
               isBlocked: false,
               completedMemberIds,
               remainingMemberIds,
+              citedMemberIds: crossTalkHistoryRef.current.citedMemberIds,
               lastSpeech: stateSnapshotRef.current.vnSpeechText,
+              allowCrossTalk: allowChairCrossTalk,
             })
+
+            if (errorPick.usedCrossTalk) {
+              recordCrossTalkUsage(member.id, errorPick.citedMemberId)
+            }
 
             setMemberProgress((prev) => {
               const current = prev[member.id]
@@ -1007,7 +1327,7 @@ export function GameProvider({ children }) {
             })
 
             setVnErrorStep(nextErrorNumber)
-            setVnSpeechText(errorSpeech)
+            setVnSpeechText(errorPick.text)
             setVnSpeechKey((prev) => prev + 1)
             setVnFeedback('wrong')
 
@@ -1036,18 +1356,19 @@ export function GameProvider({ children }) {
 
         setActionError(
           error?.message ||
-            'Não foi possível validar sua resposta agora. Verifique sua conexão e tente novamente.'
+          'Não foi possível validar sua resposta agora. Verifique sua conexão e tente novamente.'
         )
         lockRef.current = false
         setIsLocked(false)
       }
     },
     [
-      carregarHistoricoTentativas,
       challenges,
+      clearApprovalTimers,
+      completeApprovalTransition,
       handleUnauthorizedSession,
       memberProgress,
-      recarregarRankings,
+      recordCrossTalkUsage,
       registerTimeout,
     ]
   )
@@ -1055,6 +1376,7 @@ export function GameProvider({ children }) {
   // Reiniciar jogo a partir da Tela Final / Ranking
   const restartGame = useCallback(async () => {
     clearAllTimeouts()
+    resetCrossTalkHistory()
     setActionError('')
     lockRef.current = true
     setIsLocked(true)
@@ -1084,6 +1406,7 @@ export function GameProvider({ children }) {
       setActivePartida(novaPartida.partida)
       setChallenges(shuffled)
       setIsTimerRunning(false)
+      setIsTimerPausedForApproval(false)
       setRealSeconds(0)
       setPenaltySeconds(0)
       setBonusSeconds(0)
@@ -1096,9 +1419,11 @@ export function GameProvider({ children }) {
       setActiveMemberId(null)
       setVnFeedback('idle')
       setVnApprovalMessage('')
+      setApprovalReadingState(null)
       setVnSpeechText('')
       setVnErrorStep(0)
       setCeoBriefingDismissed(false)
+      setCouncilEntranceState('waiting')
       setMazeModal(null)
       setJustFinished(false)
       setScreen('COMIC_INTRO')
@@ -1115,11 +1440,17 @@ export function GameProvider({ children }) {
       lockRef.current = false
       setIsLocked(false)
     }
-  }, [carregarDesafiosAutenticado, clearAllTimeouts, handleUnauthorizedSession])
+  }, [
+    carregarDesafiosAutenticado,
+    clearAllTimeouts,
+    handleUnauthorizedSession,
+    resetCrossTalkHistory,
+  ])
 
   // Desconectar e voltar para a tela de login/cadastro (limpando perguntas da memória do React)
   const logout = useCallback(async () => {
     clearAllTimeouts()
+    resetCrossTalkHistory()
     try {
       await apiService.logout()
     } catch (err) {
@@ -1130,6 +1461,7 @@ export function GameProvider({ children }) {
     setPlayer(null)
     setActivePartida(null)
     setIsTimerRunning(false)
+    setIsTimerPausedForApproval(false)
     setRealSeconds(0)
     setPenaltySeconds(0)
     setBonusSeconds(0)
@@ -1145,6 +1477,7 @@ export function GameProvider({ children }) {
     setRankingHistory([])
     setRankingSetores([])
     setVnApprovalMessage('')
+    setApprovalReadingState(null)
     setVnSpeechText('')
     setVnErrorStep(0)
     setCeoBriefingDismissed(false)
@@ -1153,7 +1486,7 @@ export function GameProvider({ children }) {
     setAuthError('')
     setJustFinished(false)
     setScreen('REGISTRATION')
-  }, [clearAllTimeouts])
+  }, [clearAllTimeouts, resetCrossTalkHistory])
 
   const value = useMemo(
     () => ({
@@ -1167,6 +1500,7 @@ export function GameProvider({ children }) {
       clearAuthError,
       clearActionError,
       isTimerRunning,
+      isTimerPausedForApproval,
       realSeconds,
       penaltySeconds,
       bonusSeconds,
@@ -1184,11 +1518,13 @@ export function GameProvider({ children }) {
       activeMemberId,
       vnFeedback,
       vnApprovalMessage,
+      approvalReadingState,
       vnSpeechText,
       vnSpeechKey,
       vnErrorStep,
       isLocked,
       ceoBriefingDismissed,
+      councilEntranceState,
       mazeModal,
       screenFadePhase,
       rankingHistory,
@@ -1209,6 +1545,8 @@ export function GameProvider({ children }) {
       openMemberDialog,
       closeMemberDialog,
       submitMultipleChoice,
+      notifyApprovalSpeechFinished,
+      notifyApprovalSpeechSkipped,
       restartGame,
       logout,
     }),
@@ -1223,6 +1561,7 @@ export function GameProvider({ children }) {
       clearAuthError,
       clearActionError,
       isTimerRunning,
+      isTimerPausedForApproval,
       realSeconds,
       penaltySeconds,
       bonusSeconds,
@@ -1239,11 +1578,13 @@ export function GameProvider({ children }) {
       activeMemberId,
       vnFeedback,
       vnApprovalMessage,
+      approvalReadingState,
       vnSpeechText,
       vnSpeechKey,
       vnErrorStep,
       isLocked,
       ceoBriefingDismissed,
+      councilEntranceState,
       mazeModal,
       screenFadePhase,
       rankingHistory,
@@ -1263,6 +1604,8 @@ export function GameProvider({ children }) {
       openMemberDialog,
       closeMemberDialog,
       submitMultipleChoice,
+      notifyApprovalSpeechFinished,
+      notifyApprovalSpeechSkipped,
       restartGame,
       logout,
     ]

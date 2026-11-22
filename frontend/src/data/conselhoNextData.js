@@ -1,3 +1,7 @@
+import quadrinho1Img from '../assets/quadrinhos/quadrinho-1.jpg'
+import quadrinho2Img from '../assets/quadrinhos/quadrinho-2.jpg'
+import quadrinho3Img from '../assets/quadrinhos/quadrinho-3.jpg'
+
 /**
  * Referências de nome falado e gênero gramatical de cada conselheiro
  * para montagem natural das falas cruzadas no Tribunal.
@@ -16,7 +20,7 @@ export const COUNCIL_SPEAKER_REFS = {
  * Falas personalizadas de erro para cada um dos 7 conselheiros:
  * - error1: 1º erro no ciclo
  * - error2: 2º erro no ciclo
- * - blocked: 3º erro no ciclo (reprovação + bloqueio de 10s)
+ * - blocked: 3º erro no ciclo (reprovação + bloqueio de 20s)
  */
 export const MEMBER_ERROR_DIALOGUES = {
   1: {
@@ -25,7 +29,7 @@ export const MEMBER_ERROR_DIALOGUES = {
     error2:
       'Ainda não, hein... Pensa bem nos nossos endereços físicos. Última chance antes de eu fechar a porta!',
     blocked:
-      'Aí não dá, né? Dá uma volta pelo Tribunal, respira fundo e volta aqui daqui a 10 segundos!',
+      'Aí não dá, né? Dá uma volta pelo Tribunal, respira fundo e volta aqui daqui a 20 segundos!',
   },
   2: {
     error1:
@@ -33,7 +37,7 @@ export const MEMBER_ERROR_DIALOGUES = {
     error2:
       'Ainda não é essa... Foco na solução, não no chute! Mais um erro e você vai precisar de uma pausa.',
     blocked:
-      'Poxa, assim fica difícil defender! Vou te dar 10 segundos para repensar nossos pilares antes de tentar de novo.',
+      'Poxa, assim fica difícil defender! Vou te dar 20 segundos para repensar nossos pilares antes de tentar de novo.',
   },
   3: {
     error1:
@@ -41,7 +45,7 @@ export const MEMBER_ERROR_DIALOGUES = {
     error2:
       'Ainda não! Eu confio em você, mas olha bem as opções — mais um erro e vou ter que pausar a sua tentativa.',
     blocked:
-      'Ai, doeu em mim, mas tive que reprovar! Dá uma espairecida de 10 segundos e volta com tudo, combinado?',
+      'Ai, doeu em mim, mas tive que reprovar! Dá uma espairecida de 20 segundos e volta com tudo, combinado?',
   },
   4: {
     error1:
@@ -49,7 +53,7 @@ export const MEMBER_ERROR_DIALOGUES = {
     error2:
       'Ainda não! Como assim você esqueceu desse clássico da última quarta-feira do mês? Cuidado com o 3º erro!',
     blocked:
-      'Reprovado! Vai ficar 10 segundos pensando no que anda perdendo na última semana do mês... Depois volta aqui!',
+      'Reprovado! Vai ficar 20 segundos pensando no que anda perdendo na última semana do mês... Depois volta aqui!',
   },
   5: {
     error1:
@@ -57,7 +61,7 @@ export const MEMBER_ERROR_DIALOGUES = {
     error2:
       'De novo não! Tô começando a achar que você anda esquecendo de bater o ponto... Atenção máxima na próxima!',
     blocked:
-      'Bateu errado pela terceira vez! Bloqueio de 10 segundos — aproveita para ficar DE OLHO NO PONTO!!',
+      'Bateu errado pela terceira vez! Bloqueio de 20 segundos — aproveita para ficar DE OLHO NO PONTO!!',
   },
   6: {
     error1:
@@ -65,7 +69,7 @@ export const MEMBER_ERROR_DIALOGUES = {
     error2:
       'Travou o sistema? Ainda não é esse! Pensa na ferramenta que conecta todos os setores. Próximo erro dá tela azul!',
     blocked:
-      'Sistema indisponível por 10 segundos! Aproveita o reboot para lembrar qual é o melhor ERP do mercado.',
+      'Sistema indisponível por 20 segundos! Aproveita o reboot para lembrar qual é o melhor ERP do mercado.',
   },
   7: {
     error1:
@@ -73,7 +77,7 @@ export const MEMBER_ERROR_DIALOGUES = {
     error2:
       'Ainda fora do padrão! Olha a seriedade da nossa imagem — mais um deslize e você vai precisar de um tempo para ajustar o look!',
     blocked:
-      'Reprovado no quesito apresentação! 10 segundos fora da sala para revisar o PEAH e praticar o ECS antes de voltar.',
+      'Reprovado no quesito apresentação! 20 segundos fora da sala para revisar o PEAH e praticar o ECS antes de voltar.',
   },
 }
 
@@ -90,7 +94,7 @@ export const CROSS_TALK_ERROR_APPROVED = [
 ]
 
 export const CROSS_TALK_BLOCKED_APPROVED =
-  'Não acredito que {o_a} {nome} te deu o voto! Vai descansar 10 segundos e volta mais ligado.'
+  'Não acredito que {o_a} {nome} te deu o voto! Vai descansar 20 segundos e volta mais ligado.'
 
 /**
  * Falas cruzadas de erro citando um conselheiro que AINDA falta enfrentar.
@@ -128,6 +132,80 @@ function pickRandom(list) {
   return list[Math.floor(Math.random() * list.length)]
 }
 
+/**
+ * Escolhe o conselheiro alvo de uma fala cruzada em estilo "baralho sem reposição":
+ * - Prioriza exclusivamente conselheiros que ainda não foram citados na partida.
+ * - Reinicia o ciclo quando todos já apareceram, evitando repetir o último citado.
+ * - Balanceia proporcionalmente entre aprovados e pendentes para não repetir sempre o 1º aprovado.
+ */
+function pickCrossTalkTarget({
+  othersCompleted = [],
+  othersRemaining = [],
+  citedMemberIds = [],
+}) {
+  const cleanCited = Array.isArray(citedMemberIds)
+    ? citedMemberIds.map(Number).filter((id) => Boolean(COUNCIL_SPEAKER_REFS[id]))
+    : []
+  const citedSet = new Set(cleanCited)
+  const lastCitedId = cleanCited.length > 0 ? cleanCited[cleanCited.length - 1] : null
+
+  const unmentionedCompleted = othersCompleted.filter((id) => !citedSet.has(id))
+  const unmentionedRemaining = othersRemaining.filter((id) => !citedSet.has(id))
+
+  let poolCompleted = unmentionedCompleted
+  let poolRemaining = unmentionedRemaining
+
+  if (poolCompleted.length === 0 && poolRemaining.length === 0) {
+    const completedNoLast = othersCompleted.filter((id) => id !== lastCitedId)
+    const remainingNoLast = othersRemaining.filter((id) => id !== lastCitedId)
+    if (completedNoLast.length > 0 || remainingNoLast.length > 0) {
+      poolCompleted = completedNoLast
+      poolRemaining = remainingNoLast
+    } else {
+      poolCompleted = othersCompleted
+      poolRemaining = othersRemaining
+    }
+  }
+
+  if (poolCompleted.length === 0 && poolRemaining.length === 0) {
+    return null
+  }
+
+  let useApproved = false
+  if (poolCompleted.length > 0 && poolRemaining.length === 0) {
+    useApproved = true
+  } else if (poolCompleted.length > 0 && poolRemaining.length > 0) {
+    const approvedWeight = poolCompleted.length * 1.25
+    const remainingWeight = poolRemaining.length
+    useApproved = Math.random() < approvedWeight / (approvedWeight + remainingWeight)
+  }
+
+  const refId = useApproved ? pickRandom(poolCompleted) : pickRandom(poolRemaining)
+  if (!refId) return null
+
+  return { refId, useApproved }
+}
+
+/**
+ * Estima a duração da digitação do typewriter (speed = 22ms + pausas de pontuação).
+ */
+export function estimateSpeechTypingMs(text, speed = 22) {
+  const normalized = String(text || '')
+  let total = 0
+  for (let i = 0; i < normalized.length; i += 1) {
+    const ch = normalized[i]
+    const nextCh = normalized[i + 1]
+    if (/[.!?]/.test(ch)) {
+      total += nextCh && /[.!?]/.test(nextCh) ? speed * 1.4 : Math.max(speed * 10, 250)
+    } else if (/[,;:—–]/.test(ch)) {
+      total += Math.max(speed * 5, 125)
+    } else {
+      total += speed
+    }
+  }
+  return Math.ceil(total)
+}
+
 export function formatCrossTalkSpeech(template, ref) {
   if (!template || !ref) return template || ''
   const isFem = ref.genero === 'f'
@@ -149,38 +227,54 @@ export function getErrorDialogue(errorCount) {
 /**
  * Escolhe a saudação ao abrir um conselheiro:
  * - Se for o 7º e último conselheiro restante, dispara a frase especial de reta final.
- * - Se o jogador já passou por outros conselheiros, tem 25% de chance de abrir com fala cruzada.
- * - Caso contrário, exibe a saudação oficial daquele conselheiro.
+ * - Se o jogador já passou por outros conselheiros e permitido, tem 15% de chance de abrir
+ *   com fala cruzada citando preferencialmente alguém ainda não mencionado na partida.
+ * - Caso contrário, exibe a saudação educacional oficial daquele conselheiro.
  */
 export function pickOpeningGreeting({
   memberId,
   defaultGreeting = '',
   completedMemberIds = [],
+  citedMemberIds = [],
+  allowCrossTalk = true,
   totalMembers = 7,
 }) {
-  const othersCompleted = completedMemberIds
-    .map(Number)
-    .filter((id) => id !== memberId && Boolean(COUNCIL_SPEAKER_REFS[id]))
+  const othersCompleted = Array.from(
+    new Set(
+      completedMemberIds
+        .map(Number)
+        .filter((id) => id !== memberId && Boolean(COUNCIL_SPEAKER_REFS[id]))
+    )
+  )
 
   if (totalMembers > 1 && othersCompleted.length >= totalMembers - 1) {
-    return FINAL_MEMBER_GREETING
+    return { text: FINAL_MEMBER_GREETING, citedMemberId: null, usedCrossTalk: false }
   }
 
-  if (othersCompleted.length > 0 && Math.random() < 0.25) {
-    const refId = pickRandom(othersCompleted)
+  if (allowCrossTalk && othersCompleted.length > 0 && Math.random() < 0.15) {
+    const target = pickCrossTalkTarget({
+      othersCompleted,
+      othersRemaining: [],
+      citedMemberIds,
+    })
     const template = pickRandom(CROSS_TALK_GREETING_APPROVED)
-    if (refId && template) {
-      return formatCrossTalkSpeech(template, COUNCIL_SPEAKER_REFS[refId])
+    if (target?.refId && template) {
+      return {
+        text: formatCrossTalkSpeech(template, COUNCIL_SPEAKER_REFS[target.refId]),
+        citedMemberId: target.refId,
+        usedCrossTalk: true,
+      }
     }
   }
 
-  return defaultGreeting
+  return { text: defaultGreeting, citedMemberId: null, usedCrossTalk: false }
 }
 
 /**
  * Escolhe a fala de erro dinâmica do conselheiro:
- * - Combina falas personalizadas por conselheiro + nível do erro (1º, 2º ou 3º bloqueio)
- *   com falas cruzadas que citam conselheiros reais já aprovados ou ainda pendentes.
+ * - Prioriza as falas personalizadas/educativas do próprio conselheiro (~80%).
+ * - Em uma minoria controlada (~20% quando permitido na cadeira), usa fala cruzada
+ *   sem repetir o mesmo conselheiro em sequência.
  */
 export function pickErrorDialogue({
   memberId,
@@ -188,52 +282,96 @@ export function pickErrorDialogue({
   isBlocked = false,
   completedMemberIds = [],
   remainingMemberIds = [],
+  citedMemberIds = [],
   lastSpeech = '',
   allowCrossTalk = true,
 }) {
-  const othersCompleted = completedMemberIds
-    .map(Number)
-    .filter((id) => id !== memberId && Boolean(COUNCIL_SPEAKER_REFS[id]))
-  const othersRemaining = remainingMemberIds
-    .map(Number)
-    .filter((id) => id !== memberId && Boolean(COUNCIL_SPEAKER_REFS[id]))
+  const othersCompleted = Array.from(
+    new Set(
+      completedMemberIds
+        .map(Number)
+        .filter((id) => id !== memberId && Boolean(COUNCIL_SPEAKER_REFS[id]))
+    )
+  )
+  const othersRemaining = Array.from(
+    new Set(
+      remainingMemberIds
+        .map(Number)
+        .filter((id) => id !== memberId && Boolean(COUNCIL_SPEAKER_REFS[id]))
+    )
+  )
 
   const memberSet = MEMBER_ERROR_DIALOGUES[memberId]
 
   if (isBlocked) {
-    if (allowCrossTalk && othersCompleted.length > 0 && Math.random() < 0.4) {
-      const refId = pickRandom(othersCompleted)
-      return formatCrossTalkSpeech(CROSS_TALK_BLOCKED_APPROVED, COUNCIL_SPEAKER_REFS[refId])
+    if (allowCrossTalk && othersCompleted.length > 0 && Math.random() < 0.2) {
+      const target = pickCrossTalkTarget({
+        othersCompleted,
+        othersRemaining: [],
+        citedMemberIds,
+      })
+      if (target?.refId) {
+        return {
+          text: formatCrossTalkSpeech(
+            CROSS_TALK_BLOCKED_APPROVED,
+            COUNCIL_SPEAKER_REFS[target.refId]
+          ),
+          citedMemberId: target.refId,
+          usedCrossTalk: true,
+        }
+      }
     }
-    return memberSet?.blocked || getErrorDialogue(3)
+    return {
+      text: memberSet?.blocked || getErrorDialogue(3),
+      citedMemberId: null,
+      usedCrossTalk: false,
+    }
   }
 
   const canCrossTalk =
     allowCrossTalk && (othersCompleted.length > 0 || othersRemaining.length > 0)
 
-  if (canCrossTalk && Math.random() < 0.45) {
-    const useApproved =
-      othersCompleted.length > 0 && (othersRemaining.length === 0 || Math.random() < 0.72)
+  if (canCrossTalk && Math.random() < 0.2) {
+    const target = pickCrossTalkTarget({
+      othersCompleted,
+      othersRemaining,
+      citedMemberIds,
+    })
 
-    const refId = useApproved ? pickRandom(othersCompleted) : pickRandom(othersRemaining)
-    const templates = useApproved ? CROSS_TALK_ERROR_APPROVED : CROSS_TALK_ERROR_PENDING
-    const candidates = templates
-      .map((tpl) => formatCrossTalkSpeech(tpl, COUNCIL_SPEAKER_REFS[refId]))
-      .filter((line) => line !== lastSpeech)
+    if (target?.refId) {
+      const templates = target.useApproved
+        ? CROSS_TALK_ERROR_APPROVED
+        : CROSS_TALK_ERROR_PENDING
+      const candidates = templates
+        .map((tpl) => formatCrossTalkSpeech(tpl, COUNCIL_SPEAKER_REFS[target.refId]))
+        .filter((line) => line !== lastSpeech)
 
-    const chosen = pickRandom(candidates.length > 0 ? candidates : templates)
-    if (chosen) {
-      return chosen.includes('{')
-        ? formatCrossTalkSpeech(chosen, COUNCIL_SPEAKER_REFS[refId])
-        : chosen
+      const chosen = pickRandom(candidates.length > 0 ? candidates : templates)
+      if (chosen) {
+        return {
+          text: chosen.includes('{')
+            ? formatCrossTalkSpeech(chosen, COUNCIL_SPEAKER_REFS[target.refId])
+            : chosen,
+          citedMemberId: target.refId,
+          usedCrossTalk: true,
+        }
+      }
     }
   }
 
   if (memberSet) {
-    return errorNumber >= 2 ? memberSet.error2 : memberSet.error1
+    return {
+      text: errorNumber >= 2 ? memberSet.error2 : memberSet.error1,
+      citedMemberId: null,
+      usedCrossTalk: false,
+    }
   }
 
-  return getErrorDialogue(errorNumber)
+  return {
+    text: getErrorDialogue(errorNumber),
+    citedMemberId: null,
+    usedCrossTalk: false,
+  }
 }
 
 export const UNITS_LIST = [
@@ -259,33 +397,48 @@ export const DEPARTMENTS_LIST = [
 export const COMIC_PANELS = [
   {
     id: 1,
+    image: quadrinho1Img,
     step: 'CENA 01 · A SALA DA PRESIDÊNCIA',
     title: 'A Ideia do CEO',
-    bgGradient: 'from-amber-500/20 via-slate-900 to-slate-950',
-    accentColor: 'border-amber-400',
-    badgeText: '18h45 · Cobertura Falavinha Next',
-    narration: 'No alto do prédio corporativo, o CEO observa os indicadores de final de ano e tem uma epifania...',
-    speech: '“Precisamos de um exame prático definitivo para avaliar nossos funcionários sob pressão real!”',
+    narration:
+      'Na sua sala corporativa, o CEO observa os indicadores de final de ano e tem uma epifania...',
+    speech:
+      '“Precisamos de um exame prático e definitivo para avaliar nossos liderados sob pressão!”',
+    layout: {
+      narrationStyle: { top: '2.4%', left: '3%', width: '82%' },
+      speechStyle: { bottom: '2.6%', left: '3%', width: '71%' },
+      speechTail: 'top-right',
+    },
   },
   {
     id: 2,
+    image: quadrinho2Img,
     step: 'CENA 02 · A CONVOCAÇÃO',
     title: 'A Ligação Direta',
-    bgGradient: 'from-teal-500/20 via-slate-900 to-slate-950',
-    accentColor: 'border-teal-400',
-    badgeText: 'Linha Vermelha · Ramal do Conselho',
-    narration: 'Sem perder um segundo, ele aciona o ramal confidencial que conecta as 7 lideranças da empresa.',
-    speech: '“Convoquem as 7 cabeças na Sala Circular. Ninguém sai sem o veredito unânime da bancada.”',
+    narration:
+      'Sem perder um segundo, ele aciona o ramal confidencial que conecta os 7 conselheiros da empresa.',
+    speech:
+      '“Convoquem os 7 conselheiros na Sala de Avaliação. Ninguém sai de lá sem conquistar os 7 selos da bancada.”',
+    layout: {
+      narrationStyle: { top: '2.2%', left: '3%', width: '82%' },
+      speechStyle: { top: '14.8%', left: '12%', right: '12%' },
+      speechTail: 'bottom-center',
+    },
   },
   {
     id: 3,
+    image: quadrinho3Img,
     step: 'CENA 03 · O CHAMADO',
-    title: 'O Próximo Candidato',
-    bgGradient: 'from-sky-500/20 via-slate-900 to-slate-950',
-    accentColor: 'border-sky-400',
-    badgeText: 'Intimação Imediata',
-    narration: 'O telefone desliga. No seu monitor, um alerta pisca: sua presença foi requisitada no Conselho Next.',
-    speech: '“O cronômetro já está rodando. Vamos descobrir quem realmente conhece a Falavinha Next.”',
+    title: 'O Convite ao Conselho',
+    narration:
+      'O telefone desliga. O convite é disparado: você foi convidado para o Conselho Next.',
+    speech:
+      '“O cronômetro já está rodando. Vamos descobrir quem realmente conhece a Falavinha Next.”',
+    layout: {
+      narrationStyle: { top: '2.2%', left: '3%', width: '84%' },
+      speechStyle: { bottom: '2.2%', left: '3%', right: '3%' },
+      speechTail: 'none',
+    },
   },
 ]
 
@@ -293,7 +446,7 @@ export const CEO_TRIBUNAL_BRIEFING = {
   name: 'Jhonny',
   title: 'CEO · Presidente do Conselho',
   message:
-    'Seja bem-vindo ao Conselho Next! Logo adiante, estarão os 7 conselheiros que decidiram fazer parte dessa sua avaliação. Você poderá conversar com eles na ordem que preferir... mas não se engane: todos estarão de olho nas suas respostas, e isso vai decidir o seu futuro por aqui. A cada aprovação conquistada, você avançará mais um passo no labirinto até alcançar a sala do cliente. O seu desempenho será medido pelo tempo total de prova — e, atenção, cada erro somará +5s ao relógio. Se errar 3 vezes na mesma cadeira, você levará +10s, precisará refazer a questão e aquele conselheiro só voltará a te receber depois de 10s. Mas calma, nem tudo é notícia ruim... Acertar 3 conselheiros seguidos de primeira garante -5s de bônus, e fechar o Conselho invicto rende mais -10s extras! Agora é por sua própria conta e risco: abra o labirinto e comece o desafio.',
+    'Seja bem-vindo ao Conselho Next! Logo adiante, estarão os 7 conselheiros que decidiram fazer parte dessa sua avaliação. Você poderá conversar com eles na ordem que preferir... mas não se engane: todos estarão de olho nas suas respostas, e isso vai decidir o seu futuro por aqui. Cada aprovação garante 1 selo oficial daquele conselheiro — e você só poderá sair do Conselho quando conquistar os 7 selos, avançando passo a passo no labirinto até alcançar a sala do cliente. O seu desempenho será medido pelo tempo total de prova — e, atenção, cada erro somará +5s ao relógio. Se errar 3 vezes na mesma cadeira, você levará +10s, precisará refazer a questão e aquele conselheiro só voltará a te receber depois de 20s. Mas calma, nem tudo é notícia ruim... Acertar 3 conselheiros seguidos de primeira garante -5s de bônus, e fechar o Conselho invicto rende mais -10s extras! Agora é por sua própria conta e risco: abra o labirinto e comece o desafio.',
 }
 
 /**

@@ -46,12 +46,14 @@ import cutout7EdSuccess from '../../assets/ed/cutout-7-ed-success.webp'
 import tribunalMesaSoloImg from '../../assets/outros/tribunal-mesa-solo.webp'
 import { useGame } from '../../context/gameContextInstance'
 import { CEO_TRIBUNAL_BRIEFING, COUNCIL_MEMBERS } from '../../data/conselhoNextData'
+import { getWaxSealByMemberId } from '../../data/waxSealsData'
 import { useTypewriter } from '../../hooks/useTypewriter'
-import { playDialogueBlipSound } from '../../utils/soundEffects'
+import { playDialogueBlipSound, playWaxSealStampSound } from '../../utils/soundEffects'
 
 const POSE_SWITCH_TYPING_MS = 1100
 const POSE_SWITCH_IDLE_MS = 2800
 const WRONG_POSE_DURATION_MS = 2000
+const WAX_SEAL_IMPACT_SOUND_DELAY_MS = 165
 
 const MEMBER_CUTOUTS = {
   1: {
@@ -161,6 +163,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     memberProgress,
     vnFeedback,
     vnApprovalMessage,
+    approvalReadingState,
     vnSpeechText,
     vnSpeechKey,
     vnErrorStep,
@@ -170,6 +173,8 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     clearActionError,
     closeMemberDialog,
     submitMultipleChoice,
+    notifyApprovalSpeechFinished,
+    notifyApprovalSpeechSkipped,
     openIntroMazeModal,
   } = useGame()
 
@@ -181,6 +186,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
   const [selectedOptionId, setSelectedOptionId] = useState(null)
   const [hoveredOptionId, setHoveredOptionId] = useState(null)
   const [spotlightDismissed, setSpotlightDismissed] = useState(false)
+  const [approvalBarUi, setApprovalBarUi] = useState({ progress: 1, remainingSec: 2.5 })
 
   const posesOnCurrentSideRef = useRef(0)
   const overlayRef = useRef(null)
@@ -189,11 +195,20 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
   const questionRef = useRef(null)
   const spotlightRectsRef = useRef(null)
   const flipTimeoutRef = useRef(null)
+  const approvalBarPhaseRef = useRef({
+    key: 0,
+    targetEndAt: 0,
+    startAt: 0,
+    startProgress: 1,
+    currentProgress: 1,
+  })
 
   if (vnFeedback !== prevFeedback) {
     setPrevFeedback(vnFeedback)
     if (vnFeedback === 'wrong' || vnFeedback === 'blocked') {
       setIsShowingWrongPose(true)
+    } else if (vnFeedback === 'approved') {
+      setIsShowingWrongPose(false)
     }
   }
 
@@ -220,6 +235,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     setPoseIndex(0)
     setIsFlipped(false)
     setSpotlightDismissed(false)
+    setIsShowingWrongPose(false)
   }
 
   useEffect(() => {
@@ -239,7 +255,9 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
   const isApprovedState = !isCeoIntro && vnFeedback === 'approved'
   const isBlockedState = !isCeoIntro && vnFeedback === 'blocked'
   const isWrongShake = !isCeoIntro && (vnFeedback === 'wrong' || isBlockedState)
-  const showWrongVisual = isBlockedState || isShowingWrongPose
+  const showWrongVisual = !isApprovedState && (isBlockedState || isShowingWrongPose)
+  const activeWaxSeal = !isCeoIntro && memberId ? getWaxSealByMemberId(memberId) : null
+  const approvalSealKey = approvalReadingState?.key || memberId || 'approved'
 
   const speechMode = isCeoIntro
     ? 'ceo'
@@ -287,6 +305,61 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     triggerKey: isCeoIntro ? 'ceo-intro' : `${memberId || 0}-${speechMode}-${vnSpeechKey}`,
     onCharacter: handleTypeChar,
   })
+
+  // Notifica o contexto assim que o conselheiro termina de falar a aprovação naturalmente
+  useEffect(() => {
+    if (isApprovedState && !isTyping) {
+      notifyApprovalSpeechFinished()
+    }
+  }, [isApprovedState, isTyping, notifyApprovalSpeechFinished])
+
+  // Dispara o áudio tátil do carimbo de cera no instante exato do impacto + screen shake
+  useEffect(() => {
+    if (!isApprovedState || !activeWaxSeal) return undefined
+    const timer = setTimeout(() => {
+      playWaxSealStampSound()
+    }, WAX_SEAL_IMPACT_SOUND_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [isApprovedState, activeWaxSeal, approvalSealKey])
+
+  // Anima a barrinha dinâmica de leitura da aprovação sem saltos (mesmo ao pular com clique)
+  useEffect(() => {
+    if (!isApprovedState || !approvalReadingState) return undefined
+
+    const phase = approvalBarPhaseRef.current
+    const nowInit = Date.now()
+    if (phase.key !== approvalReadingState.key) {
+      phase.key = approvalReadingState.key
+      phase.startAt = approvalReadingState.startedAt
+      phase.targetEndAt = approvalReadingState.targetEndAt
+      phase.startProgress = 1
+      phase.currentProgress = 1
+    } else if (phase.targetEndAt !== approvalReadingState.targetEndAt) {
+      phase.startAt = nowInit
+      phase.targetEndAt = approvalReadingState.targetEndAt
+      phase.startProgress = phase.currentProgress
+    }
+
+    let rafId = 0
+    const tick = () => {
+      const now = Date.now()
+      const duration = Math.max(1, phase.targetEndAt - phase.startAt)
+      const elapsed = Math.max(0, now - phase.startAt)
+      const ratio = Math.max(0, Math.min(1, 1 - elapsed / duration))
+      const progress = phase.startProgress * ratio
+      phase.currentProgress = progress
+
+      const remainingSec = Math.max(0, (phase.targetEndAt - now) / 1000)
+      setApprovalBarUi({ progress, remainingSec })
+
+      if (now < phase.targetEndAt) {
+        rafId = requestAnimationFrame(tick)
+      }
+    }
+
+    rafId = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafId)
+  }, [isApprovedState, approvalReadingState])
 
   // Troca de pose moderada durante a fala (1100ms) e mais espaçada em idle (2800ms),
   // com micro-impulso e chance de flipar horizontalmente apenas após um bloco de trocas do mesmo lado.
@@ -419,9 +492,12 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
     captureSpotlightRects()
     if (isTyping) {
       skip()
+      if (isApprovedState) {
+        notifyApprovalSpeechSkipped()
+      }
     }
     setSpotlightDismissed(true)
-  }, [captureSpotlightRects, isTyping, skip])
+  }, [captureSpotlightRects, isApprovedState, isTyping, notifyApprovalSpeechSkipped, skip])
 
   // Atalho global de teclado (Espaço / Enter) para pular a fala inicial sem perder tempo no cronômetro
   useEffect(() => {
@@ -496,7 +572,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-40 bg-[#F5F0E6] text-stone-900 flex flex-col overflow-y-auto animate-overlay-enter"
+      className="fixed inset-0 z-40 bg-[#F5F0E6] text-stone-900 flex flex-col overflow-y-auto overflow-x-hidden animate-overlay-enter"
       role="dialog"
       aria-modal="true"
       aria-label={speakerName}
@@ -526,13 +602,13 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
       <div
         className={`w-full my-auto ${
           isCeoIntro ? 'pt-6 sm:pt-10 pb-8' : 'pt-16 sm:pt-[72px] pb-8 sm:pb-10'
-        }`}
+        } ${isApprovedState && activeWaxSeal ? 'animate-wax-screen-shake' : ''}`}
       >
         {/* Topo: Caixa de Falas estilo Pokémon / Ace Attorney */}
         <div
           ref={speechBoxRef}
-          className={`w-full max-w-6xl mx-auto px-4 sm:px-8 shrink-0 animate-panel-rise relative z-30 transition-transform duration-500 ease-out ${
-            isIntroSpotlight ? 'lg:scale-[1.02] lg:translate-y-1' : 'scale-100 translate-y-0'
+          className={`w-full max-w-6xl mx-auto px-4 sm:px-8 shrink-0 animate-panel-rise relative transition-transform duration-500 ease-out ${
+            isIntroSpotlight ? 'z-30 lg:scale-[1.02] lg:translate-y-1' : 'z-20 scale-100 translate-y-0'
           }`}
         >
         <div className="flex items-end justify-between gap-4">
@@ -599,9 +675,11 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
           <div className="mt-1.5 flex items-center justify-between gap-4 text-[11px] font-mono">
             <span className="text-stone-500">
               {isApprovedState
-                ? 'Registrando aprovação no Tribunal...'
+                ? isTyping
+                  ? 'Cronômetro pausado · Clique (ou Espaço) para pular a fala'
+                  : 'Cronômetro pausado · Voltando ao Tribunal...'
                 : isBlockedState
-                  ? 'Conselheiro bloqueado por 10s...'
+                  ? 'Conselheiro bloqueado por 20s...'
                   : isIntroSpotlight
                     ? 'Modo Foco: clique em qualquer lugar (ou Espaço) para ir direto à pergunta'
                     : isTyping
@@ -620,7 +698,9 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                     : 'text-[#B87D1E]'
               }`}
             >
-              {isApprovedState || isBlockedState ? (
+              {isApprovedState ? (
+                <span>{`${approvalBarUi.remainingSec.toFixed(1).replace('.', ',')}s`}</span>
+              ) : isBlockedState ? (
                 <span>3,5s</span>
               ) : (
                 <ChevronsRight
@@ -632,7 +712,10 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
 
           {isApprovedState && (
             <div className="absolute inset-x-0 bottom-0 h-1.5 bg-[#EBE4D5] overflow-hidden border-t border-emerald-600">
-              <div className="h-full bg-emerald-600 animate-reading-bar" />
+              <div
+                className="h-full bg-emerald-600 origin-left"
+                style={{ transform: `scaleX(${approvalBarUi.progress})` }}
+              />
             </div>
           )}
 
@@ -719,8 +802,18 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                 </span>
               </div>
 
-              {/* Badge/Carimbo Animado estilo Ace Attorney na frente da mesa (Acerto / Erro) */}
-              {showWrongVisual && (
+              {/* Badge/Carimbo Animado estilo Ace Attorney na frente da mesa (mutuamente exclusivo: Acerto OU Erro) */}
+              {isApprovedState ? (
+                <div
+                  key="approved-stamp"
+                  className="absolute -top-4 right-2 sm:right-4 z-30 animate-vn-stamp"
+                >
+                  <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 text-white border-2 border-stone-950 shadow-[4px_4px_0px_#1C1917] font-black text-xs sm:text-sm uppercase tracking-[0.16em]">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>APROVADO!</span>
+                  </div>
+                </div>
+              ) : showWrongVisual ? (
                 <div
                   key={`wrong-stamp-${vnErrorStep}-${progress.errors}-${penaltyAlertSeconds}`}
                   className="absolute -top-4 right-2 sm:right-4 z-30 animate-vn-stamp"
@@ -736,19 +829,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                     </span>
                   </div>
                 </div>
-              )}
-
-              {isApprovedState && (
-                <div
-                  key="approved-stamp"
-                  className="absolute -top-4 right-2 sm:right-4 z-30 animate-vn-stamp"
-                >
-                  <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 text-white border-2 border-stone-950 shadow-[4px_4px_0px_#1C1917] font-black text-xs sm:text-sm uppercase tracking-[0.16em]">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    <span>APROVADO!</span>
-                  </div>
-                </div>
-              )}
+              ) : null}
             </div>
             </div>
           </div>
@@ -761,7 +842,9 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
             } ${
               isIntroSpotlight
                 ? 'order-2 lg:order-2 opacity-20 scale-[0.97] blur-[1px] max-lg:max-h-[180px] max-lg:overflow-hidden pointer-events-none z-10'
-                : 'order-1 lg:order-2 opacity-100 scale-100 blur-0 max-lg:max-h-[950px] pointer-events-auto z-20'
+                : isApprovedState
+                  ? 'order-1 lg:order-2 opacity-100 scale-100 blur-0 max-lg:max-h-[950px] pointer-events-auto z-30'
+                  : 'order-1 lg:order-2 opacity-100 scale-100 blur-0 max-lg:max-h-[950px] pointer-events-auto z-20'
             }`}
           >
             <div className="space-y-5 animate-modal-pop">
@@ -775,7 +858,7 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                     Pronto para Encarar a Bancada?
                   </h2>
                   <p className="text-xs sm:text-sm text-stone-600">
-                    Veja o percurso 3D no mapa e clique em OK para dar a largada no cronômetro.
+                    Cada aprovação garante 1 selo oficial — conquiste os 7 selos para sair do Conselho. Veja o percurso 3D no mapa e clique em OK para dar a largada no cronômetro.
                   </p>
                 </div>
 
@@ -792,21 +875,50 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
               </div>
             ) : (
               <div
-                className={`bg-[#FDFBF7] border-2 p-5 sm:p-6 shadow-[6px_6px_0px_#1C1917] lg:min-h-[416px] flex flex-col justify-between gap-4 transition-colors duration-300 ${
-                  screenTensionLevel >= 3
-                    ? 'border-red-700'
-                    : screenTensionLevel === 2
-                      ? 'border-red-500/80'
-                      : 'border-stone-900'
+                className={`relative bg-[#FDFBF7] border-2 p-5 sm:p-6 shadow-[6px_6px_0px_#1C1917] lg:min-h-[416px] flex flex-col justify-between gap-4 transition-colors duration-300 ${
+                  isApprovedState
+                    ? 'border-emerald-700'
+                    : screenTensionLevel >= 3
+                      ? 'border-red-700'
+                      : screenTensionLevel === 2
+                        ? 'border-red-500/80'
+                        : 'border-stone-900'
                 }`}
               >
+                {/* Carimbão do Selo de Cera lacrando o documento da pergunta no momento do acerto */}
+                {isApprovedState && activeWaxSeal && (
+                  <div
+                    key={`wax-seal-stamp-${approvalSealKey}`}
+                    aria-hidden="true"
+                    className="pointer-events-none select-none absolute top-0 right-0 translate-x-[35%] sm:translate-x-1/2 -translate-y-[36%] z-30 flex items-center justify-center w-[clamp(4.4rem,7.8vw,6.8rem)] aspect-square"
+                  >
+                    {/* Anel de impacto sincronizado à batida */}
+                    <span
+                      className="absolute inset-1.5 rounded-full border-[3px] animate-wax-impact-ring"
+                      style={{
+                        borderColor: activeWaxSeal.ringColor,
+                        boxShadow: `0 0 18px ${activeWaxSeal.ringColor}`,
+                      }}
+                    />
+
+                    {/* Selo de cera caindo com peso e overshoot tátil */}
+                    <img
+                      src={activeWaxSeal.image}
+                      alt=""
+                      draggable={false}
+                      style={{ '--seal-tilt': `${activeWaxSeal.stampTiltDeg}deg` }}
+                      className="relative w-full h-full object-contain animate-wax-seal-slam drop-shadow-[0_8px_16px_rgba(28,25,23,0.44)]"
+                    />
+                  </div>
+                )}
+
                 <div className="border-l-4 border-[#D99B38] pl-4 sm:pl-5 space-y-1.5">
                   <h3 className="text-lg sm:text-2xl font-bold text-stone-900 leading-snug">
                     {activeMember.question}
                   </h3>
                   {progress.errors === 2 && !isApprovedState && (
                     <p className="text-[11px] font-black uppercase tracking-[0.14em] text-red-600">
-                      Atenção: próximo erro aplica +10s e bloqueia o conselheiro por 10s!
+                      Atenção: próximo erro aplica +10s e bloqueia o conselheiro por 20s!
                     </p>
                   )}
                 </div>
@@ -887,7 +999,9 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                         {isOptionDisabled && (
                           <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 shrink-0">
                             <XCircle className="w-4 h-4" />
-                            <span>+5s</span>
+                            <span>
+                              {isBlockedState && selectedOptionId === option.id ? '+10s' : '+5s'}
+                            </span>
                           </span>
                         )}
 

@@ -19,6 +19,7 @@ import {
   Users,
 } from 'lucide-react'
 import { useGame } from '../../context/gameContextInstance'
+import { getWaxSealByMemberId } from '../../data/waxSealsData'
 import { calcularAssertividade, formatarTempo } from '../../utils/validacaoDesafio'
 
 const ITEMS_PER_PAGE = 10
@@ -250,21 +251,36 @@ function FinalRankingScreen() {
                 </div>
               </div>
 
-              {/* Resumo das 7 Cadeiras do Conselho */}
+              {/* Resumo das 7 Cadeiras do Conselho com os 7 Selos de Cera Conquistados */}
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 pt-1">
                 {councilList.map((m, idx) => {
                   const st = memberProgress[m.id] || { errors: 0, totalErrors: 0, penaltySeconds: 0 }
                   const totalMemberErrors = st.totalErrors ?? st.errors ?? 0
                   const totalMemberPenalty = st.penaltySeconds ?? totalMemberErrors * 5
+                  const waxSeal = getWaxSealByMemberId(m.id)
                   return (
                     <div
                       key={m.id}
                       style={{ animationDelay: `${180 + idx * 45}ms` }}
-                      className="rounded-none bg-[#F5F0E6] border-2 border-stone-300 border-t-4 border-t-stone-900 p-3 text-center space-y-1 animate-panel-rise"
+                      className={`group rounded-none bg-[#F5F0E6] border-2 border-stone-300 border-t-4 ${
+                        waxSeal?.accentBorder || 'border-t-stone-900'
+                      } p-3 text-center space-y-1.5 animate-panel-rise`}
                     >
-                      <div className="inline-flex items-center justify-center w-6 h-6 rounded-none bg-emerald-600 text-white">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                      </div>
+                      {waxSeal?.image ? (
+                        <div className="mx-auto w-14 h-14 flex items-center justify-center">
+                          <img
+                            src={waxSeal.image}
+                            alt={`Selo de ${m.name}`}
+                            draggable={false}
+                            style={{ transform: `rotate(${waxSeal.cardTiltDeg}deg)` }}
+                            className="w-full h-full object-contain drop-shadow-[0_4px_7px_rgba(28,25,23,0.35)] transition-transform duration-200 group-hover:scale-110"
+                          />
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center justify-center w-6 h-6 rounded-none bg-emerald-600 text-white">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        </div>
+                      )}
                       <div className="text-xs font-black uppercase tracking-tight text-stone-900 truncate">
                         {m.name}
                       </div>
