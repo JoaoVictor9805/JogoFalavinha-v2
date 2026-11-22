@@ -1,11 +1,12 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Clock, Compass, Flame, Loader2, Pause, Shield, User } from 'lucide-react'
 import { useGame } from '../../context/gameContextInstance'
+import { prefetchMazeModalChunk } from '../../utils/assetPrefetch'
 import { formatarTempo } from '../../utils/validacaoDesafio'
 import { MAZE_STEPS } from '../maze3d/mazeData'
 import SealCaseDrawer from './SealCaseDrawer'
 
-const MazeModal3D = lazy(() => import('../maze3d/MazeModal3D'))
+const MazeModal3D = lazy(() => prefetchMazeModalChunk())
 
 function HudTimerHeader() {
   const {
@@ -58,9 +59,10 @@ function HudTimerHeader() {
     (screen === 'TRIBUNAL_HUB' && isCouncilReady) || screen === 'FINAL_RANKING'
   const showSealDrawer = showSideHud && !mazeModal
   const showMapButton = screen === 'TRIBUNAL_HUB' && isCouncilReady && !mazeModal
+  const keepMazeMounted = screen === 'TRANSITION_ARRIVAL' || screen === 'TRIBUNAL_HUB'
   const showMazeModal = screen === 'TRIBUNAL_HUB' && Boolean(mazeModal)
 
-  if (!showSideHud && !showMazeModal) {
+  if (!showSideHud && !keepMazeMounted) {
     return null
   }
 
@@ -247,21 +249,22 @@ function HudTimerHeader() {
         </div>
       )}
 
-      {/* Modal 3D: Abertura do CEO, Avanço automático, Erro/Reprovação ou Visualização manual */}
-      {showMazeModal && (
+      {/* Modal 3D: pré-aquecido durante a chegada/briefing e mantido em cache durante o Tribunal */}
+      {keepMazeMounted && (
         <Suspense
           fallback={
-            <div className="fixed inset-0 z-[60] bg-stone-950/60 backdrop-blur-[2px] flex items-center justify-center p-4">
-              <div className="bg-[#FDFBF7] border-2 border-stone-900 px-6 py-4 shadow-[6px_6px_0px_#1C1917] flex items-center gap-3 text-xs font-black uppercase tracking-[0.18em] text-stone-900">
-                <Loader2 className="w-4 h-4 animate-spin text-[#B87D1E]" />
-                <span>Carregando Maquete 3D...</span>
+            showMazeModal ? (
+              <div className="fixed inset-0 z-[60] bg-stone-950/60 backdrop-blur-[2px] flex items-center justify-center p-4">
+                <div className="bg-[#FDFBF7] border-2 border-stone-900 px-6 py-4 shadow-[6px_6px_0px_#1C1917] flex items-center gap-3 text-xs font-black uppercase tracking-[0.18em] text-stone-900">
+                  <Loader2 className="w-4 h-4 animate-spin text-[#B87D1E]" />
+                  <span>Carregando Maquete 3D...</span>
+                </div>
               </div>
-            </div>
+            ) : null
           }
         >
           <MazeModal3D
-            key={`${mazeModal.mode}-${mazeModal.fromStep}-${mazeModal.toStep}`}
-            modalState={mazeModal}
+            modalState={showMazeModal ? mazeModal : null}
             onConfirmIntro={confirmIntroMazeAndStart}
             onClose={closeMazeModal}
           />

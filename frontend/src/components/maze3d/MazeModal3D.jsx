@@ -50,9 +50,11 @@ function detectWebGL() {
 }
 
 function MazeViewport({
-  initialStep,
-  targetStep,
-  animateIntro,
+  isOpen = false,
+  mode = 'manual',
+  initialStep = 0,
+  targetStep = 0,
+  animateIntro = false,
   triggerError = false,
   isFinal = false,
   onFinalArrival,
@@ -62,6 +64,8 @@ function MazeViewport({
   const [webglUnavailable, setWebglUnavailable] = useState(() => !detectWebGL())
   const [isSceneReady, setIsSceneReady] = useState(false)
 
+  const isOpenRef = useRef(isOpen)
+  const modeRef = useRef(mode)
   const initialStepRef = useRef(initialStep)
   const targetStepRef = useRef(targetStep)
   const animateIntroRef = useRef(animateIntro)
@@ -71,22 +75,7 @@ function MazeViewport({
   const finalTriggeredRef = useRef(false)
   const genderRef = useRef(gender)
   const worldRef = useRef(null)
-
-  useEffect(() => {
-    isFinalRef.current = isFinal
-    onFinalArrivalRef.current = onFinalArrival
-  }, [isFinal, onFinalArrival])
-
-  useEffect(() => {
-    if (!webglUnavailable || !isFinal || finalTriggeredRef.current) return undefined
-    const timer = setTimeout(() => {
-      if (finalTriggeredRef.current) return
-      finalTriggeredRef.current = true
-      playVictorySound()
-      onFinalArrivalRef.current?.()
-    }, 350)
-    return () => clearTimeout(timer)
-  }, [webglUnavailable, isFinal])
+  const engineRef = useRef(null)
 
   const stepAudioRef = useRef(null)
   const chimeAudioRef = useRef(null)
@@ -94,39 +83,48 @@ function MazeViewport({
   const prevTargetRef = useRef(targetStep)
 
   useEffect(() => {
+    isFinalRef.current = isFinal
+    onFinalArrivalRef.current = onFinalArrival
+  }, [isFinal, onFinalArrival])
+
+  useEffect(() => {
+    if (!webglUnavailable || !isOpen || !isFinal || finalTriggeredRef.current) return undefined
+    const timer = setTimeout(() => {
+      if (finalTriggeredRef.current) return
+      finalTriggeredRef.current = true
+      playVictorySound()
+      onFinalArrivalRef.current?.()
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [webglUnavailable, isOpen, isFinal])
+
+  useEffect(() => {
     const stepSfx = new Audio('/sounds/footstep.mp3')
+    stepSfx.preload = 'auto'
     stepSfx.volume = 0.4
     stepAudioRef.current = stepSfx
 
     const chime = new Audio('/sounds/chime.mp3')
+    chime.preload = 'auto'
     chime.volume = 0.45
     chimeAudioRef.current = chime
 
     const phone = new Audio('/sounds/desk-phone-ring.mp3')
+    phone.preload = 'auto'
     phone.volume = 0.35
     phoneAudioRef.current = phone
 
     return () => {
+      stepSfx.pause()
+      chime.pause()
+      phone.pause()
       stepAudioRef.current = null
       chimeAudioRef.current = null
       phoneAudioRef.current = null
     }
   }, [])
 
-  useEffect(() => {
-    targetStepRef.current = targetStep
-    if (targetStep > prevTargetRef.current) {
-      if (worldRef.current) {
-        worldRef.current.successAt = performance.now()
-      }
-      if (chimeAudioRef.current) {
-        chimeAudioRef.current.currentTime = 0
-        chimeAudioRef.current.play().catch(() => {})
-      }
-    }
-    prevTargetRef.current = targetStep
-  }, [targetStep])
-
+  // Inicializa o contexto WebGL + RoomEnvironment uma única vez e mantém em cache durante o Tribunal
   useEffect(() => {
     const container = containerRef.current
     if (!container || webglUnavailable) return undefined
@@ -141,7 +139,7 @@ function MazeViewport({
     let disposed = false
     let scene
 
-    // Aguarda 1 frame para o navegador pintar o indicador de loading antes da inicialização pesada do WebGL
+    // Aguarda 1 frame para não disputar com a pintura da UI antes da inicialização do WebGL
     initRafId = requestAnimationFrame(() => {
       if (disposed || !containerRef.current) return
 
@@ -175,16 +173,13 @@ function MazeViewport({
       roomEnv.dispose()
 
       const world = createWorldState()
-      if (triggerErrorRef.current) {
-        world.errorActive = true
-      }
       worldRef.current = world
 
-      const skipIntroAnim = !animateIntroRef.current
-      const structure = buildMazeStructure(world, { skipRise: skipIntroAnim })
+      const shouldAnimateIntro = isOpenRef.current && animateIntroRef.current
+      const structure = buildMazeStructure(world, { skipRise: !shouldAnimateIntro })
       const room = buildClientRoom()
       const johnny = buildJohnnyModel(initialStepRef.current, {
-        skipDrop: skipIntroAnim,
+        skipDrop: !shouldAnimateIntro,
         gender: genderRef.current,
       })
       scene.add(structure.group, room.group, johnny.group)
@@ -286,7 +281,7 @@ function MazeViewport({
       const deltaTarget = new THREE.Vector3()
       let mountMs = null
       let prevMs = null
-      let firstFrameRendered = false
+      let isLoopRunning = false
 
       const onFootstep = () => {
         const audio = stepAudioRef.current
@@ -303,10 +298,7 @@ function MazeViewport({
         onFinalArrivalRef.current?.()
       }
 
-      const animate = () => {
-        if (disposed) return
-        rafId = requestAnimationFrame(animate)
-        const nowMs = performance.now()
+      const renderFrame = (nowMs) => {
         if (mountMs === null) {
           mountMs = nowMs
           prevMs = nowMs
@@ -385,20 +377,89 @@ function MazeViewport({
         controls.update()
 
         renderer.render(scene, camera)
+      }
 
-        if (!firstFrameRendered) {
-          firstFrameRendered = true
-          setIsSceneReady(true)
+      const animate = () => {
+        if (disposed || !isLoopRunning) return
+        rafId = requestAnimationFrame(animate)
+        renderFrame(performance.now())
+      }
+
+      const stopLoop = () => {
+        isLoopRunning = false
+        if (rafId) {
+          cancelAnimationFrame(rafId)
+          rafId = 0
         }
       }
 
-      rafId = requestAnimationFrame(animate)
+      const startLoop = () => {
+        if (disposed || isLoopRunning) return
+        mountMs = null
+        prevMs = null
+        isLoopRunning = true
+        rafId = requestAnimationFrame(animate)
+      }
+
+      const configureSessionState = ({
+        open,
+        step = 0,
+        intro = false,
+        errorMode = false,
+      }) => {
+        stopLoop()
+
+        world.errorActive = Boolean(open && errorMode)
+        world.errorAt = -1
+        world.successAt = -1
+        world.victoryAt = -1
+        world.doorOpen = 0
+
+        pulseMesh.visible = false
+        victoryPulseMesh.visible = false
+        errorRedLight.intensity = 0
+        victoryGoldLight.intensity = 0
+        victoryEmeraldLight.intensity = 0
+        scene.background.copy(baseBgColor)
+        scene.fog.color.copy(baseBgColor)
+
+        structure.reset({ skipRise: !(open && intro) })
+        johnny.reset(step, { skipDrop: !(open && intro) })
+        room.update(0, performance.now(), world)
+
+        camera.fov = BASE_FOV
+        camera.position.set(-5.8, 8.6, 10.6)
+        controls.target.copy(structure.center)
+        fitCamera()
+
+        if (open) {
+          startLoop()
+        }
+      }
+
+      engineRef.current = {
+        configureSessionState,
+        stopLoop,
+      }
+
+      // Renderiza 1 frame inicial para compilar shaders da GPU já durante o aquecimento silencioso
+      configureSessionState({
+        open: isOpenRef.current,
+        step: initialStepRef.current,
+        intro: animateIntroRef.current,
+        errorMode: triggerErrorRef.current,
+      })
+      if (!isOpenRef.current) {
+        renderFrame(performance.now())
+      }
+      setIsSceneReady(true)
     })
 
     return () => {
       disposed = true
       cancelAnimationFrame(initRafId)
       cancelAnimationFrame(rafId)
+      engineRef.current = null
       observer?.disconnect()
       controls?.dispose()
 
@@ -424,6 +485,51 @@ function MazeViewport({
       worldRef.current = null
     }
   }, [webglUnavailable])
+
+  // Sincroniza abertura/fechamento do modal reutilizando o mesmo WebGLRenderer sem recriá-lo
+  useEffect(() => {
+    isOpenRef.current = isOpen
+    modeRef.current = mode
+    initialStepRef.current = initialStep
+    animateIntroRef.current = animateIntro
+    triggerErrorRef.current = triggerError
+    finalTriggeredRef.current = false
+
+    if (!isOpen) {
+      phoneAudioRef.current?.pause()
+      chimeAudioRef.current?.pause()
+      stepAudioRef.current?.pause()
+      if (phoneAudioRef.current) phoneAudioRef.current.currentTime = 0
+      engineRef.current?.configureSessionState({ open: false, step: initialStep })
+      return
+    }
+
+    prevTargetRef.current = initialStep
+    engineRef.current?.configureSessionState({
+      open: true,
+      step: initialStep,
+      intro: animateIntro,
+      errorMode: triggerError,
+    })
+  }, [isOpen, mode, initialStep, animateIntro, triggerError])
+
+  useEffect(() => {
+    targetStepRef.current = targetStep
+    if (!isOpen) {
+      prevTargetRef.current = targetStep
+      return
+    }
+    if (targetStep > prevTargetRef.current) {
+      if (worldRef.current) {
+        worldRef.current.successAt = performance.now()
+      }
+      if (chimeAudioRef.current) {
+        chimeAudioRef.current.currentTime = 0
+        chimeAudioRef.current.play().catch(() => {})
+      }
+    }
+    prevTargetRef.current = targetStep
+  }, [targetStep, isOpen])
 
   if (webglUnavailable) {
     return (
@@ -471,25 +577,39 @@ function MazeViewport({
  */
 function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
   const { player, isLocked, actionError, clearActionError } = useGame()
-  const { mode, fromStep, toStep, memberName, isFinal, lockSeconds = 20 } = modalState
+  const isOpen = Boolean(modalState)
+  const mode = modalState?.mode || 'manual'
+  const fromStep = modalState?.fromStep ?? 0
+  const toStep = modalState?.toStep ?? 0
+  const memberName = modalState?.memberName
+  const isFinal = Boolean(modalState?.isFinal)
+  const lockSeconds = modalState?.lockSeconds ?? 20
+
+  const [prevModalState, setPrevModalState] = useState(modalState)
   const [displayedStep, setDisplayedStep] = useState(fromStep)
   const [finalArrived, setFinalArrived] = useState(false)
   const avatarGender = player?.genero || 'masculino'
+
+  if (modalState !== prevModalState) {
+    setPrevModalState(modalState)
+    setDisplayedStep(fromStep)
+    setFinalArrived(false)
+  }
 
   const handleFinalArrival = useCallback(() => {
     setFinalArrived(true)
   }, [])
 
   useEffect(() => {
-    if (toStep <= fromStep) return undefined
+    if (!modalState || toStep <= fromStep) return undefined
     const timer = setTimeout(() => {
       setDisplayedStep(toStep)
     }, 340)
     return () => clearTimeout(timer)
-  }, [fromStep, toStep])
+  }, [modalState, fromStep, toStep])
 
   useEffect(() => {
-    if (mode === 'intro') return undefined
+    if (!modalState || mode === 'intro') return undefined
     const handleKey = (e) => {
       if (e.key === 'Escape') {
         onClose()
@@ -497,7 +617,7 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [mode, onClose])
+  }, [modalState, mode, onClose])
 
   const isIntro = mode === 'intro'
   const isProgress = mode === 'progress'
@@ -537,17 +657,22 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 z-[60] bg-stone-950/60 backdrop-blur-[2px] flex items-center justify-center p-4 sm:p-6 animate-overlay-enter"
-      role="dialog"
-      aria-modal="true"
-      aria-label={headline}
+      className={`fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 ${
+        isOpen
+          ? 'bg-stone-950/60 backdrop-blur-[2px] opacity-100 visible pointer-events-auto animate-overlay-enter'
+          : 'opacity-0 invisible pointer-events-none'
+      }`}
+      role={isOpen ? 'dialog' : undefined}
+      aria-modal={isOpen ? 'true' : undefined}
+      aria-hidden={!isOpen}
+      aria-label={isOpen ? headline : undefined}
       onClick={(e) => {
-        if (e.target === e.currentTarget && (mode === 'manual' || mode === 'error')) {
+        if (isOpen && e.target === e.currentTarget && (mode === 'manual' || mode === 'error')) {
           onClose()
         }
       }}
     >
-      <div className="max-w-3xl w-full animate-modal-pop">
+      <div className={`max-w-3xl w-full ${isOpen ? 'animate-modal-pop' : ''}`}>
         {/* Aba superior estilo Ace Attorney + Botão X */}
         <div className="flex items-end justify-between gap-4">
           <div
@@ -566,6 +691,7 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
           {!isIntro && (
             <button
               type="button"
+              tabIndex={isOpen ? 0 : -1}
               onClick={onClose}
               aria-label="Fechar mapa 3D"
               title="Fechar mapa"
@@ -594,23 +720,25 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
             </div>
           </div>
 
-          {/* Viewport 3D em destaque */}
+          {/* Viewport 3D em destaque (mantido montado durante todo o Tribunal para zero loading entre etapas) */}
           <div className="relative w-full h-[290px] sm:h-[380px] bg-[#EAE1CF] border-b-2 border-stone-900 overflow-hidden">
             <WebGLBoundary step={displayedStep}>
               <MazeViewport
-                key={`${avatarGender}-${mode}`}
+                key={avatarGender}
+                isOpen={isOpen}
+                mode={mode}
                 initialStep={fromStep}
                 targetStep={displayedStep}
                 animateIntro={isIntro}
                 triggerError={isError}
-                isFinal={Boolean(isFinal)}
+                isFinal={isFinal}
                 onFinalArrival={handleFinalArrival}
                 gender={avatarGender}
               />
             </WebGLBoundary>
 
             {/* Alerta visual pulsante em vermelho no modo erro (funciona também sem áudio) */}
-            {isError && (
+            {isOpen && isError && (
               <div
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 z-[5] animate-maze-error-flash"
