@@ -1,15 +1,16 @@
-import { Component, useEffect, useRef, useState } from 'react'
-import { AlertCircle, AlertTriangle, Check, Compass, Loader2, Play, Trophy, X } from 'lucide-react'
+import { Component, useCallback, useEffect, useRef, useState } from 'react'
+import { AlertCircle, AlertTriangle, Check, Compass, DoorOpen, Loader2, Play, X } from 'lucide-react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { useGame } from '../../context/gameContextInstance'
+import { playVictorySound } from '../../utils/soundEffects'
 import { buildClientRoom } from './buildClientRoom'
 import { buildJohnnyModel } from './buildJohnnyModel'
 import { buildMazeStructure } from './buildMazeStructure'
-import { MAZE_STEPS } from './mazeData'
+import { DOOR_X, DOOR_Z, MAZE_STEPS } from './mazeData'
 import { ringTexture } from './textures'
-import { createWorldState, errorIntensity } from './world'
+import { createWorldState, errorIntensity, victoryIntensity } from './world'
 
 const BASE_FOV = 34
 const SCENE_BG = '#eae1cf'
@@ -53,6 +54,8 @@ function MazeViewport({
   targetStep,
   animateIntro,
   triggerError = false,
+  isFinal = false,
+  onFinalArrival,
   gender = 'masculino',
 }) {
   const containerRef = useRef(null)
@@ -63,8 +66,27 @@ function MazeViewport({
   const targetStepRef = useRef(targetStep)
   const animateIntroRef = useRef(animateIntro)
   const triggerErrorRef = useRef(triggerError)
+  const isFinalRef = useRef(isFinal)
+  const onFinalArrivalRef = useRef(onFinalArrival)
+  const finalTriggeredRef = useRef(false)
   const genderRef = useRef(gender)
   const worldRef = useRef(null)
+
+  useEffect(() => {
+    isFinalRef.current = isFinal
+    onFinalArrivalRef.current = onFinalArrival
+  }, [isFinal, onFinalArrival])
+
+  useEffect(() => {
+    if (!webglUnavailable || !isFinal || finalTriggeredRef.current) return undefined
+    const timer = setTimeout(() => {
+      if (finalTriggeredRef.current) return
+      finalTriggeredRef.current = true
+      playVictorySound()
+      onFinalArrivalRef.current?.()
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [webglUnavailable, isFinal])
 
   const stepAudioRef = useRef(null)
   const chimeAudioRef = useRef(null)
@@ -187,6 +209,17 @@ function MazeViewport({
       pulseMesh.visible = false
       scene.add(pulseMesh)
 
+      const victoryPulseMat = new THREE.MeshBasicMaterial({
+        map: ringTexture('217,155,56', 28),
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      })
+      const victoryPulseMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), victoryPulseMat)
+      victoryPulseMesh.rotation.x = -Math.PI / 2
+      victoryPulseMesh.visible = false
+      scene.add(victoryPulseMesh)
+
       const hemi = new THREE.HemisphereLight('#fffbf2', '#7a6c5d', 0.95)
       scene.add(hemi)
 
@@ -207,6 +240,14 @@ function MazeViewport({
       const errorRedLight = new THREE.PointLight('#ff1f1f', 0, 28, 1.35)
       errorRedLight.position.set(0.5, 4.2, 0.2)
       scene.add(errorRedLight)
+
+      const victoryGoldLight = new THREE.PointLight('#fbbf24', 0, 14, 1.35)
+      victoryGoldLight.position.set(DOOR_X + 1.35, 3.1, DOOR_Z)
+      scene.add(victoryGoldLight)
+
+      const victoryEmeraldLight = new THREE.PointLight('#34d399', 0, 10, 1.45)
+      victoryEmeraldLight.position.set(DOOR_X + 0.7, 2.2, DOOR_Z)
+      scene.add(victoryEmeraldLight)
 
       const camera = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.5, 160)
       camera.position.set(-5.8, 8.6, 10.6)
@@ -254,6 +295,14 @@ function MazeViewport({
         audio.play().catch(() => {})
       }
 
+      const onComplete = () => {
+        if (!isFinalRef.current || finalTriggeredRef.current) return
+        finalTriggeredRef.current = true
+        world.victoryAt = performance.now()
+        playVictorySound()
+        onFinalArrivalRef.current?.()
+      }
+
       const animate = () => {
         if (disposed) return
         rafId = requestAnimationFrame(animate)
@@ -277,6 +326,7 @@ function MazeViewport({
         room.update(elapsedSec, nowMs, world)
         johnny.update(dt, nowMs, targetStepRef.current, world, {
           onFootstep,
+          onComplete,
         })
 
         const pulseAge = (nowMs - world.successAt) / 1000
@@ -290,6 +340,22 @@ function MazeViewport({
         } else {
           pulseMesh.visible = false
         }
+
+        const victoryPulseAge = (nowMs - world.victoryAt) / 1000
+        if (world.victoryAt > 0 && victoryPulseAge <= 1.5) {
+          victoryPulseMesh.visible = true
+          const vk = victoryPulseAge / 1.5
+          const vsc = 0.6 + vk * 3.6
+          victoryPulseMesh.position.set(world.pos.x, 0.03, world.pos.z)
+          victoryPulseMesh.scale.set(vsc, vsc, vsc)
+          victoryPulseMat.opacity = (1 - vk * vk) * 0.95
+        } else {
+          victoryPulseMesh.visible = false
+        }
+
+        const { glow: victoryGlow } = victoryIntensity(world, nowMs)
+        victoryGoldLight.intensity = victoryGlow * 28
+        victoryEmeraldLight.intensity = victoryGlow * 14
 
         const { e, k: errK, flash: errFlash } = errorIntensity(world, nowMs)
         errorRedLight.intensity = errFlash > 0 ? errFlash * 95 : 0
@@ -407,7 +473,12 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
   const { player, isLocked, actionError, clearActionError } = useGame()
   const { mode, fromStep, toStep, memberName, isFinal, lockSeconds = 20 } = modalState
   const [displayedStep, setDisplayedStep] = useState(fromStep)
+  const [finalArrived, setFinalArrived] = useState(false)
   const avatarGender = player?.genero || 'masculino'
+
+  const handleFinalArrival = useCallback(() => {
+    setFinalArrived(true)
+  }, [])
 
   useEffect(() => {
     if (toStep <= fromStep) return undefined
@@ -532,6 +603,8 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
                 targetStep={displayedStep}
                 animateIntro={isIntro}
                 triggerError={isError}
+                isFinal={Boolean(isFinal)}
+                onFinalArrival={handleFinalArrival}
                 gender={avatarGender}
               />
             </WebGLBoundary>
@@ -600,10 +673,14 @@ function MazeModal3D({ modalState, onConfirmIntro, onClose }) {
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3 bg-emerald-600 hover:bg-emerald-700 text-white border-2 border-stone-900 font-black text-xs uppercase tracking-[0.18em] shadow-[4px_4px_0px_#1C1917] hover:-translate-y-0.5 active:scale-95 transition-all cursor-pointer"
+                className={`w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3 border-2 border-stone-900 font-black text-xs uppercase tracking-[0.18em] hover:-translate-y-0.5 active:scale-95 transition-all cursor-pointer ${
+                  finalArrived
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-4 ring-emerald-400/60 shadow-[4px_4px_0px_#1C1917,0_0_22px_rgba(16,185,129,0.5)]'
+                    : 'bg-emerald-700/90 hover:bg-emerald-700 text-white shadow-[4px_4px_0px_#1C1917]'
+                }`}
               >
-                <Trophy className="w-4 h-4" />
-                <span>OK · Ver Ranking Final</span>
+                <DoorOpen className="w-4 h-4" />
+                <span>OK · Abrir Porta do Conselho</span>
               </button>
             ) : isProgress ? (
               <button

@@ -11,7 +11,6 @@ import {
   playCouncilPopSound,
   playPenaltySound,
   playSelectSound,
-  playVictorySound,
 } from '../utils/soundEffects'
 import { GameContext } from './gameContextInstance'
 
@@ -116,7 +115,7 @@ function clearLegacyPlayerStorage() {
 }
 
 export function GameProvider({ children }) {
-  // Progressão de telas: 'REGISTRATION' | 'COMIC_INTRO' | 'TRANSITION_ARRIVAL' | 'TRIBUNAL_HUB' | 'FINAL_RANKING'
+  // Progressão de telas: 'REGISTRATION' | 'COMIC_INTRO' | 'TRANSITION_ARRIVAL' | 'TRIBUNAL_HUB' | 'TRANSITION_EXIT' | 'FINAL_RANKING'
   const [screen, setScreen] = useState('REGISTRATION')
   const [isRestoringSession, setIsRestoringSession] = useState(true)
   const [player, setPlayer] = useState(null)
@@ -820,18 +819,18 @@ export function GameProvider({ children }) {
     setMazeModal({ mode: 'manual', fromStep: done, toStep: done })
   }, [])
 
-  // Fecha o modal do mapa (fade para preto apenas na transição final para o Ranking)
+  // Fecha o modal do mapa (fade para preto apenas na transição final para a saída do Conselho)
   const closeMazeModal = useCallback(() => {
     playSelectSound()
     const isFinalTransition = mazeModal?.mode === 'progress' && mazeModal?.isFinal
 
     if (isFinalTransition) {
+      recarregarRankings()
+      carregarHistoricoTentativas()
       triggerBlackoutTransition(() => {
         setMazeModal(null)
         setJustFinished(true)
-        setScreen('FINAL_RANKING')
-        recarregarRankings()
-        carregarHistoricoTentativas()
+        setScreen('TRANSITION_EXIT')
       })
       return
     }
@@ -856,6 +855,12 @@ export function GameProvider({ children }) {
     lockRef.current = false
     setIsLocked(false)
     setScreen('TRIBUNAL_HUB')
+  }, [])
+
+  const finishExitTransition = useCallback(() => {
+    lockRef.current = false
+    setIsLocked(false)
+    setScreen('FINAL_RANKING')
   }, [])
 
   // Finaliza a exibição da aprovação, retoma o cronômetro (visual e servidor) e abre o modal 3D
@@ -903,7 +908,6 @@ export function GameProvider({ children }) {
     if (allCompleted) {
       setIsTimerRunning(false)
       setIsTimerPausedForApproval(false)
-      playVictorySound()
       recarregarRankings()
       carregarHistoricoTentativas()
 
@@ -1542,6 +1546,7 @@ export function GameProvider({ children }) {
       loginAndStart,
       advanceFromComic,
       finishArrivalTransition,
+      finishExitTransition,
       openMemberDialog,
       closeMemberDialog,
       submitMultipleChoice,
@@ -1601,6 +1606,7 @@ export function GameProvider({ children }) {
       loginAndStart,
       advanceFromComic,
       finishArrivalTransition,
+      finishExitTransition,
       openMemberDialog,
       closeMemberDialog,
       submitMultipleChoice,

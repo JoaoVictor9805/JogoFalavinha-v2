@@ -519,3 +519,71 @@ export function playSystemBootSound() {
     // Ignora
   }
 }
+
+/**
+ * Gatilho de áudio para a cena de Transição de Saída:
+ * Simula a trava dupla destrancando pelos 7 selos seguida da abertura luminosa da porta.
+ */
+export function playExitDoorUnlockSound() {
+  try {
+    const ctx = getAudioContext()
+    if (!ctx) return
+    const now = ctx.currentTime
+
+    // 1. Destrave metálico da fechadura (dois cliques ascendentes)
+    ;[0.12, 0.36].forEach((offset, idx) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'triangle'
+      const base = idx === 0 ? 360 : 480
+      osc.frequency.setValueAtTime(base, now + offset)
+      osc.frequency.exponentialRampToValueAtTime(base * 1.45, now + offset + 0.08)
+
+      gain.gain.setValueAtTime(0.001, now + offset)
+      gain.gain.linearRampToValueAtTime(0.14, now + offset + 0.008)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.11)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(now + offset)
+      osc.stop(now + offset + 0.12)
+    })
+
+    // 2. Deslizamento suave da porta dupla abrindo (t = 1.25s)
+    const openTime = now + 1.25
+    const thudOsc = ctx.createOscillator()
+    const thudGain = ctx.createGain()
+    thudOsc.type = 'sine'
+    thudOsc.frequency.setValueAtTime(68, openTime)
+    thudOsc.frequency.exponentialRampToValueAtTime(118, openTime + 0.42)
+
+    thudGain.gain.setValueAtTime(0.001, openTime)
+    thudGain.gain.linearRampToValueAtTime(0.22, openTime + 0.04)
+    thudGain.gain.exponentialRampToValueAtTime(0.001, openTime + 0.48)
+
+    thudOsc.connect(thudGain)
+    thudGain.connect(ctx.destination)
+    thudOsc.start(openTime)
+    thudOsc.stop(openTime + 0.5)
+
+    // 3. Acorde breve de alívio ao abrir a porta (t = 1.45s)
+    ;[523.25, 659.25, 783.99].forEach((freq, idx) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      const startAt = openTime + 0.18 + idx * 0.06
+      osc.frequency.setValueAtTime(freq, startAt)
+
+      gain.gain.setValueAtTime(0.001, startAt)
+      gain.gain.linearRampToValueAtTime(0.08, startAt + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.001, startAt + 0.45)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(startAt)
+      osc.stop(startAt + 0.48)
+    })
+  } catch {
+    // Ignora
+  }
+}
