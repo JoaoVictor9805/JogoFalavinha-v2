@@ -206,6 +206,7 @@ export function buildMazeStructure(world, { skipRise = false } = {}) {
   })
 
   // Placas da marca Falavinha Next
+  THREE.Cache.enabled = true
   const texLoader = new THREE.TextureLoader()
   const plaqueTex = texLoader.load('/brand/logo-plaque.png')
   plaqueTex.colorSpace = THREE.SRGBColorSpace
@@ -354,5 +355,18 @@ export function buildMazeStructure(world, { skipRise = false } = {}) {
     glowMat.opacity = world.doorOpen * 0.9
   }
 
-  return { group: root, center: new THREE.Vector3(1.15, 0, 0.15), update }
+  function reset({ skipRise = true } = {}) {
+    risers.forEach((item) => {
+      item.done = skipRise
+      item.group.visible = skipRise
+      item.group.scale.y = skipRise ? 1 : 0.001
+    })
+    fabricMat.emissiveIntensity = 0
+    carpetMat.emissiveIntensity = 0
+    clientSignMat.emissiveIntensity = 0.25
+    leafGroup.rotation.y = 0
+    glowMat.opacity = 0
+  }
+
+  return { group: root, center: new THREE.Vector3(1.15, 0, 0.15), update, reset }
 }

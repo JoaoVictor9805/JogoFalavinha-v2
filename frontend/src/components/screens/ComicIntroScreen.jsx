@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ArrowRight, FastForward } from 'lucide-react'
 import { useGame } from '../../context/gameContextInstance'
 import { COMIC_PANELS } from '../../data/conselhoNextData'
+import { prefetchTribunalAssets } from '../../utils/assetPrefetch'
 import { playDialogueBlipSound } from '../../utils/soundEffects'
 
 const SEQUENCE = COMIC_PANELS.flatMap((panel, panelIndex) => [
@@ -55,6 +56,14 @@ function ComicIntroScreen() {
     }, INITIAL_DELAY_MS)
     return () => clearTimeout(timer)
   }, [hasStarted])
+
+  // Prefetch silencioso dos cutouts, cards, selos, áudios e chunk 3D enquanto o jogador lê os quadrinhos
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      prefetchTribunalAssets()
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [])
 
   // Motor sequencial de digitação: Q1 narração → Q1 fala → Q2 narração → Q2 fala → Q3 narração → Q3 fala
   useEffect(() => {

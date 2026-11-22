@@ -3,8 +3,11 @@ import { after, before, describe, test } from 'node:test'
 import { createApp } from '../src/app.js'
 import prisma from '../src/db.js'
 import {
+  FOLGA_MODAL_AVANCO_3D_MS,
+  MAXIMO_PAUSA_APROVACAO_TOTAL_MS,
   avaliarBonusAcerto,
   avaliarResultadoErro,
+  calcularLimitePausaAprovacaoMs,
   calcularSegundosTotais,
   calcularTempoServidor,
   consolidarPausaServidor,
@@ -593,8 +596,10 @@ describe('Escape Room Falavinha v2 — API, Regras de Negócio & Segurança', ()
     assert.equal(calcularTempoServidor({ partida: expiredPausePartida, now }), 20)
     assert.equal(consolidarPausaServidor({ partida: expiredPausePartida, now }).pausaMsAcumulados, 5000)
 
-    // Estimativa determinística da leitura da aprovação respeita mínimo de 2,5s
+    // Estimativa determinística da leitura da aprovação respeita mínimo de 2,5s e folga para o modal 3D
     assert.equal(estimarDuracaoLeituraAprovacaoMs('Curto!'), 2500)
+    assert.equal(calcularLimitePausaAprovacaoMs(2500), 2500 + FOLGA_MODAL_AVANCO_3D_MS)
+    assert.equal(calcularLimitePausaAprovacaoMs(999999), MAXIMO_PAUSA_APROVACAO_TOTAL_MS)
     assert.ok(estimarDuracaoLeituraAprovacaoMs('A'.repeat(200)) > 4000)
 
     // Mascaramento LGPD de e-mail para logs de auditoria

@@ -822,7 +822,8 @@ export function GameProvider({ children }) {
   // Fecha o modal do mapa (fade para preto apenas na transição final para a saída do Conselho)
   const closeMazeModal = useCallback(() => {
     playSelectSound()
-    const isFinalTransition = mazeModal?.mode === 'progress' && mazeModal?.isFinal
+    const currentModal = mazeModal
+    const isFinalTransition = currentModal?.mode === 'progress' && currentModal?.isFinal
 
     if (isFinalTransition) {
       recarregarRankings()
@@ -835,8 +836,33 @@ export function GameProvider({ children }) {
       return
     }
 
+    if (currentModal?.mode === 'progress') {
+      setIsTimerPausedForApproval(false)
+      const partidaId = stateSnapshotRef.current.activePartida?.id
+      if (partidaId) {
+        apiService
+          .retomarCronometro(partidaId)
+          .then((res) => {
+            if (typeof res?.segundosReais === 'number') {
+              setRealSeconds((prev) => Math.max(prev, res.segundosReais))
+            }
+          })
+          .catch((err) => {
+            if (err?.status === 401) {
+              handleUnauthorizedSession(err.message)
+            }
+          })
+      }
+    }
+
     setMazeModal(null)
-  }, [carregarHistoricoTentativas, mazeModal, recarregarRankings, triggerBlackoutTransition])
+  }, [
+    carregarHistoricoTentativas,
+    handleUnauthorizedSession,
+    mazeModal,
+    recarregarRankings,
+    triggerBlackoutTransition,
+  ])
 
   const advanceFromComic = useCallback(() => {
     if (lockRef.current) return
@@ -863,7 +889,7 @@ export function GameProvider({ children }) {
     setScreen('FINAL_RANKING')
   }, [])
 
-  // Finaliza a exibição da aprovação, retoma o cronômetro (visual e servidor) e abre o modal 3D
+  // Finaliza a exibição da aprovação mantendo o cronômetro pausado até o fechamento do modal 3D
   const completeApprovalTransition = useCallback(() => {
     const pending = pendingApprovalRef.current
     if (!pending || pending.completed) return
@@ -879,7 +905,7 @@ export function GameProvider({ children }) {
     }
     pendingApprovalRef.current = null
 
-    const { member, resultado, partidaId } = pending
+    const { member, resultado } = pending
     const snapshot = stateSnapshotRef.current
     const prevCompleted = Object.values(snapshot.memberProgress).filter(
       (item) => item.completed
@@ -919,22 +945,7 @@ export function GameProvider({ children }) {
         isFinal: true,
       })
     } else {
-      setIsTimerPausedForApproval(false)
-      if (partidaId) {
-        apiService
-          .retomarCronometro(partidaId)
-          .then((res) => {
-            if (typeof res?.segundosReais === 'number') {
-              setRealSeconds((prev) => Math.max(prev, res.segundosReais))
-            }
-          })
-          .catch((err) => {
-            if (err?.status === 401) {
-              handleUnauthorizedSession(err.message)
-            }
-          })
-      }
-
+      setIsTimerPausedForApproval(true)
       setMazeModal({
         mode: 'progress',
         fromStep: prevCompleted,
@@ -946,7 +957,7 @@ export function GameProvider({ children }) {
 
     lockRef.current = false
     setIsLocked(false)
-  }, [carregarHistoricoTentativas, handleUnauthorizedSession, recarregarRankings])
+  }, [carregarHistoricoTentativas, recarregarRankings])
 
   const scheduleApprovalClose = useCallback(
     (remainingMs, { skipped = false, speechFinished = false } = {}) => {
