@@ -124,13 +124,10 @@ function FinalRankingScreen() {
   }, [executeRankingRefresh])
 
   const councilList = Array.isArray(challenges) && challenges.length > 0 ? challenges : []
-  const assertividadeFinal = calcularAssertividade(
-    councilList.length,
-    councilList.length + totalErrors
-  )
   const tentativasList = playerHistory?.tentativas || []
   const melhorPartida = playerHistory?.melhorPartida || null
-  const latestAttempt = tentativasList[0] || null
+  const ultimaPartida = playerHistory?.ultimaPartida || null
+  const latestAttempt = ultimaPartida || tentativasList[0] || null
   const hasCompletedRun = Boolean(justFinished || melhorPartida || latestAttempt)
   const effectiveTotalErrors = justFinished
     ? totalErrors
@@ -138,6 +135,26 @@ function FinalRankingScreen() {
   const effectivePartidaId = justFinished
     ? activePartida?.id
     : (latestAttempt?.id ?? melhorPartida?.id ?? null)
+
+  const displayTotalSeconds = justFinished
+    ? totalSeconds
+    : (latestAttempt?.segundosTotais ?? melhorPartida?.segundosTotais ?? 0)
+  const displayRealSeconds = justFinished
+    ? realSeconds
+    : (latestAttempt?.segundosReais ?? melhorPartida?.segundosReais ?? 0)
+  const displayPenaltySeconds = justFinished
+    ? penaltySeconds
+    : (latestAttempt?.segundosPenalidade ?? melhorPartida?.segundosPenalidade ?? 0)
+  const displayBonusSeconds = justFinished
+    ? bonusSeconds
+    : (latestAttempt?.segundosBonus ?? melhorPartida?.segundosBonus ?? 0)
+  const assertividadeFinal = calcularAssertividade(
+    councilList.length,
+    councilList.length + effectiveTotalErrors
+  )
+  const displayMemberDetails = justFinished
+    ? memberProgress
+    : (ultimaPartida?.detalhesPorMembro || {})
 
   const currentUserRankingEntry = useMemo(
     () => rankingHistory.find((item) => Boolean(item.isCurrentUser)) || null,
@@ -201,13 +218,21 @@ function FinalRankingScreen() {
                 <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-stone-900">
                   {justFinished
                     ? 'Você Passou pelo Conselho Next!'
-                    : 'Painel de Desempenho & Recordes'}
+                    : hasCompletedRun
+                      ? 'Resumo da Última Partida'
+                      : 'Painel de Desempenho & Recordes'}
                 </h1>
                 <p className="text-xs sm:text-sm text-stone-600 mt-0.5">
                   {justFinished ? (
                     <>
                       Parabéns, <strong className="text-stone-900">{player?.nome}</strong> (
                       {player?.setor} · {player?.unidade}). Sua aprovação foi registrada no ranking!
+                    </>
+                  ) : hasCompletedRun ? (
+                    <>
+                      Colaborador: <strong className="text-stone-900">{player?.nome}</strong> (
+                      {player?.setor} · {player?.unidade})
+                      {latestAttempt?.tentativaNumero ? ` · Tentativa #${latestAttempt.tentativaNumero}` : ''}.
                     </>
                   ) : (
                     <>
@@ -270,8 +295,8 @@ function FinalRankingScreen() {
             </div>
           )}
 
-          {/* CASO A: Acabou de finalizar a corrida atual */}
-          {justFinished && (
+          {/* CASO A / RETORNO COM HISTÓRICO: Resumo completo da última partida concluída */}
+          {hasCompletedRun ? (
             <>
               {/* Métricas do Tempo Final da Corrida */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -281,7 +306,7 @@ function FinalRankingScreen() {
                       <Clock className="w-4 h-4" />
                       <span>Tempo Final Oficial</span>
                     </span>
-                    {totalErrors === 0 && (
+                    {effectiveTotalErrors === 0 && (
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-600 text-white text-[9px] font-black">
                         <Flame className="w-3 h-3" />
                         INVICTO
@@ -289,11 +314,11 @@ function FinalRankingScreen() {
                     )}
                   </div>
                   <div className="font-mono text-3xl sm:text-4xl font-black text-stone-900 mt-1.5">
-                    {formatarTempo(totalSeconds)}
+                    {formatarTempo(displayTotalSeconds)}
                   </div>
                   <div className="text-xs text-stone-500 mt-1">
-                    {totalSeconds}{' '}
-                    {totalSeconds === 1
+                    {displayTotalSeconds}{' '}
+                    {displayTotalSeconds === 1
                       ? 'segundo contabilizado'
                       : 'segundos contabilizados'}{' '}
                     · Assertividade: <strong className="text-stone-700">{assertividadeFinal}%</strong>
@@ -309,12 +334,12 @@ function FinalRankingScreen() {
                     <span>Tempo Real &amp; Bônus</span>
                   </div>
                   <div className="font-mono text-2xl sm:text-3xl font-extrabold text-stone-900 mt-1.5">
-                    {formatarTempo(realSeconds)}
+                    {formatarTempo(displayRealSeconds)}
                   </div>
                   <div className="text-xs text-stone-500 mt-1">
-                    {bonusSeconds > 0 ? (
+                    {displayBonusSeconds > 0 ? (
                       <span className="font-bold text-emerald-700">
-                        -{bonusSeconds}s de bônus (combo/invicto) aplicado
+                        -{displayBonusSeconds}s de bônus (combo/invicto) aplicado
                       </span>
                     ) : (
                       'Tempo líquido sem contar ajustes'
@@ -331,11 +356,11 @@ function FinalRankingScreen() {
                     <span>Penalidades Acumuladas</span>
                   </div>
                   <div className="font-mono text-2xl sm:text-3xl font-extrabold text-red-600 mt-1.5">
-                    +{penaltySeconds}s
+                    +{displayPenaltySeconds}s
                   </div>
                   <div className="text-xs text-stone-500 mt-1">
-                    {totalErrors}{' '}
-                    {totalErrors === 1 ? 'erro cometido' : 'erros cometidos'}
+                    {effectiveTotalErrors}{' '}
+                    {effectiveTotalErrors === 1 ? 'erro cometido' : 'erros cometidos'}
                   </div>
                 </div>
               </div>
@@ -343,7 +368,11 @@ function FinalRankingScreen() {
               {/* Resumo das 7 Cadeiras do Conselho com os 7 Selos de Cera Conquistados */}
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 pt-1">
                 {councilList.map((m, idx) => {
-                  const st = memberProgress[m.id] || { errors: 0, totalErrors: 0, penaltySeconds: 0 }
+                  const st = displayMemberDetails[m.id] || {
+                    errors: 0,
+                    totalErrors: 0,
+                    penaltySeconds: 0,
+                  }
                   const totalMemberErrors = st.totalErrors ?? st.errors ?? 0
                   const totalMemberPenalty = st.penaltySeconds ?? totalMemberErrors * 5
                   const waxSeal = getWaxSealByMemberId(m.id)
@@ -386,81 +415,28 @@ function FinalRankingScreen() {
                   )
                 })}
               </div>
-            </>
-          )}
 
-          {/* CASO B: Acessou via Login (Sem partida ativa) com histórico de tentativas */}
-          {!justFinished && melhorPartida && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-emerald-600 p-4 animate-panel-rise">
-                  <div className="flex items-center justify-between gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">
-                    <span className="inline-flex items-center gap-1.5">
-                      <Star className="w-4 h-4 fill-emerald-600" />
-                      <span>Seu Recorde Pessoal Oficial</span>
+              {/* Banner Informativo de Recorde ao revisitar a tela via login/reload */}
+              {!justFinished && melhorPartida && (
+                <div className="p-3.5 bg-stone-100 border-2 border-stone-300 flex flex-wrap items-center justify-between gap-2.5 text-stone-700 text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles className="w-4 h-4 text-[#B87D1E] shrink-0" />
+                    <span>
+                      Seu recorde oficial de <strong>{formatarTempo(melhorPartida.segundosTotais)}</strong> ({tentativasList.length}{' '}
+                      {tentativasList.length === 1 ? 'tentativa concluída' : 'tentativas concluídas'}) pontua no ranking individual e pela equipe do setor <strong>{player?.setor}</strong>.
                     </span>
-                    {currentUserRankingEntry && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[#D99B38] text-stone-950 border border-stone-900 text-[10px] font-mono font-black shrink-0">
-                        <Trophy className="w-3 h-3" />
-                        <span>{currentUserRankingEntry.posicao}º Lugar</span>
-                      </span>
-                    )}
                   </div>
-                  <div className="font-mono text-3xl sm:text-4xl font-black text-stone-900 mt-1.5">
-                    {formatarTempo(melhorPartida.segundosTotais)}
-                  </div>
-                  <div className="text-xs text-stone-500 mt-1">
-                    Seu melhor tempo registrado no ranking oficial
-                  </div>
+                  {currentUserRankingEntry && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#D99B38] text-stone-950 border border-stone-900 text-[10px] font-mono font-black shrink-0">
+                      <Trophy className="w-3 h-3" />
+                      <span>{currentUserRankingEntry.posicao}º Lugar</span>
+                    </span>
+                  )}
                 </div>
-
-                <div
-                  className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-[#D99B38] p-4 animate-panel-rise"
-                  style={{ animationDelay: '70ms' }}
-                >
-                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-[#B87D1E]">
-                    <Award className="w-4 h-4" />
-                    <span>Tempo Líquido no Recorde</span>
-                  </div>
-                  <div className="font-mono text-2xl sm:text-3xl font-extrabold text-stone-900 mt-1.5">
-                    {formatarTempo(melhorPartida.segundosReais)}
-                  </div>
-                  <div className="text-xs text-stone-500 mt-1">
-                    Tempo real sem penalidades na sua melhor corrida
-                  </div>
-                </div>
-
-                <div
-                  className="rounded-none bg-[#F5F0E6] border-2 border-stone-900 border-l-4 border-l-stone-900 p-4 animate-panel-rise"
-                  style={{ animationDelay: '140ms' }}
-                >
-                  <div className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.18em] text-stone-800">
-                    <History className="w-4 h-4" />
-                    <span>Tentativas Concluídas</span>
-                  </div>
-                  <div className="font-mono text-2xl sm:text-3xl font-extrabold text-stone-900 mt-1.5">
-                    {tentativasList.length}
-                  </div>
-                  <div className="text-xs text-stone-500 mt-1">
-                    {tentativasList.length === 1
-                      ? '1 tentativa completa registrada'
-                      : `${tentativasList.length} tentativas completas registradas`}
-                  </div>
-                </div>
-              </div>
-
-              {/* Banner Informativo */}
-              <div className="p-3.5 bg-stone-100 border-2 border-stone-300 flex items-center gap-2.5 text-stone-700 text-xs">
-                <Sparkles className="w-4 h-4 text-[#B87D1E] shrink-0" />
-                <span>
-                  Seu recorde de <strong>{formatarTempo(melhorPartida.segundosTotais)}</strong> pontua no ranking individual e pela equipe do setor <strong>{player?.setor}</strong>.
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* CASO C: Acessou via Login mas ainda não completou nenhuma tentativa */}
-          {!justFinished && !melhorPartida && (
+              )}
+            </>
+          ) : (
+            /* CASO C: Acessou via Login mas ainda não completou nenhuma tentativa */
             <div className="p-6 bg-stone-100 border-2 border-dashed border-stone-400 text-center space-y-3">
               <div className="w-12 h-12 mx-auto rounded-none bg-[#D99B38]/20 text-[#B87D1E] border-2 border-stone-900 flex items-center justify-center">
                 <Sparkles className="w-6 h-6" />

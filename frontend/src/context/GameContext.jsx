@@ -127,6 +127,7 @@ export function GameProvider({ children }) {
   const [playerHistory, setPlayerHistory] = useState({
     totalTentativas: 0,
     melhorPartida: null,
+    ultimaPartida: null,
     tentativas: [],
   })
 
@@ -288,7 +289,7 @@ export function GameProvider({ children }) {
       setCeoBriefingDismissed(false)
       setCouncilEntranceState('waiting')
       setMazeModal(null)
-      setPlayerHistory({ totalTentativas: 0, melhorPartida: null, tentativas: [] })
+      setPlayerHistory({ totalTentativas: 0, melhorPartida: null, ultimaPartida: null, tentativas: [] })
       setRankingHistory([])
       setRankingSetores([])
       setJustFinished(false)
@@ -323,6 +324,7 @@ export function GameProvider({ children }) {
         setPlayerHistory({
           totalTentativas: res.totalTentativas || 0,
           melhorPartida: res.melhorPartida || null,
+          ultimaPartida: res.ultimaPartida || null,
           tentativas: res.tentativas || [],
         })
         return res
@@ -1488,7 +1490,7 @@ export function GameProvider({ children }) {
     setMemberLocks({})
     setActiveMemberId(null)
     setVnFeedback('idle')
-    setPlayerHistory({ totalTentativas: 0, melhorPartida: null, tentativas: [] })
+    setPlayerHistory({ totalTentativas: 0, melhorPartida: null, ultimaPartida: null, tentativas: [] })
     setRankingHistory([])
     setRankingSetores([])
     setVnApprovalMessage('')

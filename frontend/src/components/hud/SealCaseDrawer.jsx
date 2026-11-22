@@ -58,8 +58,11 @@ function SealCaseDrawer() {
       ? hasPreviousCompletion
       : Boolean(prog?.completed)
     const totalMemberErrors = prog?.totalErrors ?? prog?.errors ?? 0
-    const showFlawlessBadge =
-      isUnlocked && !isFinalRankingArchiveView && totalMemberErrors === 0
+    const lastMatchMemberErrors =
+      playerHistory?.ultimaPartida?.detalhesPorMembro?.[member.id]?.totalErrors ?? 0
+    const showFlawlessBadge = isFinalRankingArchiveView
+      ? Boolean(playerHistory?.ultimaPartida) && lastMatchMemberErrors === 0
+      : isUnlocked && totalMemberErrors === 0
 
     return {
       memberId: member.id,
