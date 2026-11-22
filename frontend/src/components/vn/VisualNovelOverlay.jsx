@@ -49,6 +49,7 @@ import { CEO_TRIBUNAL_BRIEFING, COUNCIL_MEMBERS } from '../../data/conselhoNextD
 import { getWaxSealByMemberId } from '../../data/waxSealsData'
 import { useTypewriter } from '../../hooks/useTypewriter'
 import { playDialogueBlipSound, playWaxSealStampSound } from '../../utils/soundEffects'
+import CounselorChallengePanel from './challenges/CounselorChallengePanel'
 
 const POSE_SWITCH_TYPING_MS = 1100
 const POSE_SWITCH_IDLE_MS = 2800
@@ -939,82 +940,21 @@ function VisualNovelOverlay({ isCeoIntro = false }) {
                   </div>
                 )}
 
-                <div className="space-y-2.5">
-                  {activeMember.options?.map((option, optIdx) => {
-                    const isOptionDisabled = progress.disabledOptions.includes(option.id)
-                    const isHighlightedSuccess = isApprovedState && selectedOptionId === option.id
-
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        disabled={isLocked || isOptionDisabled || isApprovedState || isBlockedState}
-                        onMouseEnter={() => {
-                          if (!isOptionDisabled && !isApprovedState && !isBlockedState) {
-                            setHoveredOptionId(option.id)
-                          }
-                        }}
-                        onMouseLeave={() => setHoveredOptionId(null)}
-                        onFocus={() => {
-                          if (!isOptionDisabled && !isApprovedState && !isBlockedState) {
-                            setHoveredOptionId(option.id)
-                          }
-                        }}
-                        onBlur={() => setHoveredOptionId(null)}
-                        onClick={() => {
-                          setHoveredOptionId(null)
-                          setSelectedOptionId(option.id)
-                          submitMultipleChoice(activeMember.id, option.id)
-                        }}
-                        style={{ animationDelay: `${optIdx * 60}ms` }}
-                        className={`group w-full text-left p-4 border-2 flex items-center justify-between gap-3 animate-panel-rise transition-all duration-200 ${
-                          isHighlightedSuccess
-                            ? 'bg-emerald-50 border-emerald-600 text-emerald-950 shadow-[3px_3px_0px_#059669]'
-                            : isOptionDisabled
-                              ? 'bg-red-50/70 border-red-200 text-stone-400 cursor-not-allowed'
-                              : 'bg-white hover:bg-[#F5F0E6] border-stone-300 hover:border-stone-900 hover:-translate-y-0.5 hover:shadow-[3px_3px_0px_#1C1917] text-stone-800 cursor-pointer active:scale-[0.995] disabled:opacity-60 disabled:pointer-events-none'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3.5">
-                          <span
-                            className={`w-8 h-8 font-mono text-xs font-black flex items-center justify-center shrink-0 transition-colors ${
-                              isHighlightedSuccess
-                                ? 'bg-emerald-600 text-white'
-                                : isOptionDisabled
-                                  ? 'bg-red-100 text-red-500 border border-red-200'
-                                  : 'bg-stone-900 text-white group-hover:bg-[#D99B38] group-hover:text-stone-950'
-                            }`}
-                          >
-                            {option.label}
-                          </span>
-                          <span
-                            className={`text-sm sm:text-base font-semibold leading-snug ${
-                              isOptionDisabled ? 'line-through text-stone-400' : 'text-stone-800'
-                            }`}
-                          >
-                            {option.text}
-                          </span>
-                        </div>
-
-                        {isOptionDisabled && (
-                          <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 shrink-0">
-                            <XCircle className="w-4 h-4" />
-                            <span>
-                              {isBlockedState && selectedOptionId === option.id ? '+10s' : '+5s'}
-                            </span>
-                          </span>
-                        )}
-
-                        {isHighlightedSuccess && (
-                          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 shrink-0">
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>Correta</span>
-                          </span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
+                <CounselorChallengePanel
+                  member={activeMember}
+                  options={activeMember.options || []}
+                  disabledOptions={progress.disabledOptions}
+                  selectedOptionId={selectedOptionId}
+                  isApprovedState={isApprovedState}
+                  isBlockedState={isBlockedState}
+                  isLocked={isLocked}
+                  onHoverOption={setHoveredOptionId}
+                  onSelectOption={(optionId) => {
+                    setHoveredOptionId(null)
+                    setSelectedOptionId(optionId)
+                    submitMultipleChoice(activeMember.id, optionId)
+                  }}
+                />
               </div>
             )}
             </div>

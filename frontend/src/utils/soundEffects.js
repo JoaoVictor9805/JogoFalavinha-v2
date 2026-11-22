@@ -463,3 +463,59 @@ export function playWaxSealStampSound() {
     // Ignora
   }
 }
+
+/**
+ * Bip digital curto de relógio de ponto (usado na dinâmica do Juarez).
+ */
+export function playClockPunchSound() {
+  try {
+    const ctx = getAudioContext()
+    if (!ctx) return
+    const now = ctx.currentTime
+
+    ;[880, 1174.66].forEach((freq, idx) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'square'
+      osc.frequency.setValueAtTime(freq, now + idx * 0.075)
+
+      gain.gain.setValueAtTime(0.06, now + idx * 0.075)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.075 + 0.065)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(now + idx * 0.075)
+      osc.stop(now + idx * 0.075 + 0.07)
+    })
+  } catch {
+    // Ignora
+  }
+}
+
+/**
+ * Som suave de inicialização de sistema corporativo (usado na dinâmica do Ricardo).
+ */
+export function playSystemBootSound() {
+  try {
+    const ctx = getAudioContext()
+    if (!ctx) return
+    const now = ctx.currentTime
+
+    ;[440, 660].forEach((freq, idx) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(freq, now + idx * 0.055)
+
+      gain.gain.setValueAtTime(0.09, now + idx * 0.055)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.055 + 0.14)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(now + idx * 0.055)
+      osc.stop(now + idx * 0.055 + 0.15)
+    })
+  } catch {
+    // Ignora
+  }
+}
