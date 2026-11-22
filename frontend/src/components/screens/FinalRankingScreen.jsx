@@ -12,7 +12,6 @@ import {
   Info,
   LogOut,
   Play,
-  RefreshCw,
   RotateCcw,
   Sparkles,
   Star,
@@ -26,7 +25,6 @@ import CeoVerdictSection from './CeoVerdictSection'
 
 const ITEMS_PER_PAGE = 10
 const RANKING_POLL_INTERVAL_MS = 15000
-const MANUAL_REFRESH_COOLDOWN_MS = 3000
 
 function formatUpdateClock(date) {
   if (!date) return ''
@@ -62,8 +60,6 @@ function FinalRankingScreen() {
 
   // Alternância interna do Placar: 'geral' (Individual) | 'setores' (Equipes)
   const [rankingTab, setRankingTab] = useState('geral')
-  const [isRefreshingRankings, setIsRefreshingRankings] = useState(false)
-  const [refreshCooldown, setRefreshCooldown] = useState(false)
   const [lastUpdatedAt, setLastUpdatedAt] = useState(null)
 
   const [currentPageGeral, setCurrentPageGeral] = useState(1)
@@ -72,39 +68,18 @@ function FinalRankingScreen() {
 
   const isRefreshingRef = useRef(false)
   const lastFetchMsRef = useRef(0)
-  const cooldownTimerRef = useRef(null)
 
-  const executeRankingRefresh = useCallback(
-    async ({ includeHistory = false, showSpinner = false } = {}) => {
-      if (isRefreshingRef.current || !recarregarRankings) return
-      isRefreshingRef.current = true
-      if (showSpinner) {
-        setIsRefreshingRankings(true)
-      }
-      try {
-        await Promise.all([
-          recarregarRankings(),
-          includeHistory && player?.id && carregarHistoricoTentativas
-            ? carregarHistoricoTentativas()
-            : Promise.resolve(),
-        ])
-        lastFetchMsRef.current = Date.now()
-        setLastUpdatedAt(new Date())
-      } finally {
-        isRefreshingRef.current = false
-        setIsRefreshingRankings(false)
-      }
-    },
-    [carregarHistoricoTentativas, player?.id, recarregarRankings]
-  )
-
-  useEffect(() => {
-    return () => {
-      if (cooldownTimerRef.current) {
-        clearTimeout(cooldownTimerRef.current)
-      }
+  const executeRankingRefresh = useCallback(async () => {
+    if (isRefreshingRef.current || !recarregarRankings) return
+    isRefreshingRef.current = true
+    try {
+      await recarregarRankings()
+      lastFetchMsRef.current = Date.now()
+      setLastUpdatedAt(new Date())
+    } finally {
+      isRefreshingRef.current = false
     }
-  }, [])
+  }, [recarregarRankings])
 
   // Carga inicial ao abrir a tela
   useEffect(() => {
@@ -128,7 +103,7 @@ function FinalRankingScreen() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        executeRankingRefresh({ includeHistory: false, showSpinner: false })
+        executeRankingRefresh()
       }
     }, RANKING_POLL_INTERVAL_MS)
 
@@ -137,7 +112,7 @@ function FinalRankingScreen() {
         document.visibilityState === 'visible' &&
         Date.now() - lastFetchMsRef.current >= RANKING_POLL_INTERVAL_MS
       ) {
-        executeRankingRefresh({ includeHistory: false, showSpinner: false })
+        executeRankingRefresh()
       }
     }
 
@@ -147,17 +122,6 @@ function FinalRankingScreen() {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [executeRankingRefresh])
-
-  const handleManualRefresh = () => {
-    if (isRefreshingRankings || refreshCooldown) return
-    setRefreshCooldown(true)
-    if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current)
-    cooldownTimerRef.current = setTimeout(() => {
-      setRefreshCooldown(false)
-    }, MANUAL_REFRESH_COOLDOWN_MS)
-
-    executeRankingRefresh({ includeHistory: Boolean(player?.id), showSpinner: true })
-  }
 
   const councilList = Array.isArray(challenges) && challenges.length > 0 ? challenges : []
   const assertividadeFinal = calcularAssertividade(
@@ -510,7 +474,7 @@ function FinalRankingScreen() {
           className="space-y-4 animate-panel-rise"
           style={{ animationDelay: '220ms' }}
         >
-          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-l-4 border-[#D99B38] pl-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-l-4 border-[#D99B38] pl-4">
             <div className="flex flex-wrap items-center gap-2.5">
               <Trophy className="w-5 h-5 text-stone-900" />
               <h2 className="text-lg font-black uppercase tracking-tight text-stone-900">
@@ -527,45 +491,30 @@ function FinalRankingScreen() {
               </span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
+            {/* Alternância de Abas: Individual vs Setores */}
+            <div className="inline-flex border-2 border-stone-900 bg-stone-200">
               <button
                 type="button"
-                onClick={handleManualRefresh}
-                disabled={isRefreshingRankings || refreshCooldown}
-                title="Atualizar placar agora"
-                className="inline-flex items-center gap-1.5 py-1.5 px-3 bg-[#FDFBF7] hover:bg-[#EFE7D6] text-stone-800 border-2 border-stone-900 text-xs font-black uppercase tracking-[0.12em] shadow-[2px_2px_0px_#1C1917] active:scale-95 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
+                onClick={() => setRankingTab('geral')}
+                className={`py-1.5 px-3.5 text-xs font-black uppercase tracking-[0.14em] cursor-pointer transition-all ${
+                  rankingTab === 'geral'
+                    ? 'bg-[#D99B38] text-stone-950 shadow-inner'
+                    : 'bg-[#FDFBF7] text-stone-600 hover:text-stone-900'
+                }`}
               >
-                <RefreshCw
-                  className={`w-3.5 h-3.5 ${isRefreshingRankings ? 'animate-spin' : ''}`}
-                />
-                <span>{isRefreshingRankings ? 'Atualizando...' : 'Atualizar'}</span>
+                Ranking Geral (Individual)
               </button>
-
-              {/* Alternância de Abas: Individual vs Setores */}
-              <div className="inline-flex border-2 border-stone-900 bg-stone-200">
-                <button
-                  type="button"
-                  onClick={() => setRankingTab('geral')}
-                  className={`py-1.5 px-3.5 text-xs font-black uppercase tracking-[0.14em] cursor-pointer transition-all ${
-                    rankingTab === 'geral'
-                      ? 'bg-[#D99B38] text-stone-950 shadow-inner'
-                      : 'bg-[#FDFBF7] text-stone-600 hover:text-stone-900'
-                  }`}
-                >
-                  Ranking Geral (Individual)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRankingTab('setores')}
-                  className={`py-1.5 px-3.5 text-xs font-black uppercase tracking-[0.14em] border-l-2 border-stone-900 cursor-pointer transition-all ${
-                    rankingTab === 'setores'
-                      ? 'bg-[#D99B38] text-stone-950 shadow-inner'
-                      : 'bg-[#FDFBF7] text-stone-600 hover:text-stone-900'
-                  }`}
-                >
-                  Ranking por Equipes (Setores)
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setRankingTab('setores')}
+                className={`py-1.5 px-3.5 text-xs font-black uppercase tracking-[0.14em] border-l-2 border-stone-900 cursor-pointer transition-all ${
+                  rankingTab === 'setores'
+                    ? 'bg-[#D99B38] text-stone-950 shadow-inner'
+                    : 'bg-[#FDFBF7] text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                Ranking por Equipes (Setores)
+              </button>
             </div>
           </div>
 
