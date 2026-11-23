@@ -6,6 +6,8 @@ frontend/dist/
 
 # Env files
 .env
+.env.*
+!.env.prod.example
 backend/.env
 frontend/.env
 
