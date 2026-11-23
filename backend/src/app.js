@@ -91,7 +91,7 @@ export function createApp() {
   // Teto global amplo por IP pensando em rede corporativa (200+ pessoas atrás do mesmo NAT/Wi-Fi)
   const ipFloodLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 3000,
+    max: 12000,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     handler: createRateLimitHandler('ip_flood', {
@@ -102,7 +102,7 @@ export function createApp() {
   // Limite individual por colaborador autenticado (não afeta colegas no mesmo IP)
   const userSessionLimiter = rateLimit({
     windowMs: 60 * 1000,
-    max: 120,
+    max: 150,
     skip: (req) => !getAuthenticatedUserId(req),
     keyGenerator: (req) => `user:${getAuthenticatedUserId(req)}`,
     standardHeaders: 'draft-7',
@@ -161,7 +161,7 @@ export function createApp() {
 
   const registerIpCeilingLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 500,
+    max: 1000,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     handler: createRateLimitHandler('register_ip_ceiling', {

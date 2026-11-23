@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs'
+import bcrypt from 'bcrypt'
 import { Router } from 'express'
 import {
   GENEROS_VALIDOS,
@@ -10,7 +10,11 @@ import {
   isValidUuid,
 } from '../data/constantes.js'
 import prisma from '../db.js'
-import { requireAuth } from '../middleware/requireAuth.js'
+import {
+  invalidateAuthSessionCache,
+  requireAuth,
+  setAuthSessionCache,
+} from '../middleware/requireAuth.js'
 import { calcularSegundosTotais, calcularTempoServidor } from '../utils/gameRules.js'
 import {
   SESSION_COOKIE_NAME,
@@ -169,6 +173,7 @@ router.post('/cadastrar', async (req, res) => {
 
     const { tokenVersion, ...jogadorPublico } = novoJogador
     setSessionCookie(res, jogadorPublico.id, tokenVersion)
+    setAuthSessionCache(jogadorPublico.id, tokenVersion)
 
     logSecurityEvent('REGISTER_SUCCESS', {
       jogadorId: jogadorPublico.id,
@@ -246,6 +251,7 @@ router.post('/login', async (req, res) => {
     }
 
     setSessionCookie(res, jogador.id, jogador.tokenVersion)
+    setAuthSessionCache(jogador.id, jogador.tokenVersion)
     const partidaAtiva = await buscarPartidaAtiva(jogador.id)
 
     logSecurityEvent('LOGIN_SUCCESS', {
@@ -315,6 +321,7 @@ router.post('/logout', async (req, res) => {
             where: { id: decoded.sub },
             data: { tokenVersion: { increment: 1 } },
           })
+          invalidateAuthSessionCache(decoded.sub)
           logSecurityEvent('LOGOUT_REVOKED', {
             jogadorId: decoded.sub,
             ip: req.ip,

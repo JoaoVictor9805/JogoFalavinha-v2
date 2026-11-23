@@ -4,6 +4,109 @@ import { requireAuth } from '../middleware/requireAuth.js'
 
 const router = Router()
 
+const DESAFIOS_CACHE_TTL_MS = 30000
+let desafiosCache = {
+  expiresAt: 0,
+  data: null,
+}
+let gabaritoServerCache = {
+  expiresAt: 0,
+  map: null,
+}
+
+export async function getOpcaoDesafioServerSide(desafioId, opcaoId) {
+  const now = Date.now()
+  if (!gabaritoServerCache.map || gabaritoServerCache.expiresAt <= now) {
+    const opcoes = await prisma.opcaoDesafio.findMany({
+      include: { desafio: true },
+    })
+    const map = new Map()
+    for (const opt of opcoes) {
+      map.set(`${opt.desafioId}:${opt.opcaoId}`, opt)
+    }
+    if (map.size > 0) {
+      gabaritoServerCache = {
+        expiresAt: now + DESAFIOS_CACHE_TTL_MS,
+        map,
+      }
+    }
+    return map.get(`${desafioId}:${opcaoId}`) || null
+  }
+  return gabaritoServerCache.map.get(`${desafioId}:${opcaoId}`) || null
+}
+
+async function obterDesafiosFormatados() {
+  const now = Date.now()
+  if (desafiosCache.data && desafiosCache.expiresAt > now) {
+    return desafiosCache.data
+  }
+
+  const desafios = await prisma.desafio.findMany({
+    orderBy: { id: 'asc' },
+    select: {
+      id: true,
+      codigo: true,
+      nome: true,
+      cargo: true,
+      rotuloCurto: true,
+      posicaoMesa: true,
+      gradienteAvatar: true,
+      corBorda: true,
+      corBrilho: true,
+      corBadge: true,
+      tipo: true,
+      saudacao: true,
+      pergunta: true,
+      // 'mensagemAprovacao' NÃO é selecionado propositalmente (evita vazar gabarito antes do acerto)
+      opcoes: {
+        orderBy: { opcaoId: 'asc' },
+        select: {
+          opcaoId: true,
+          rotulo: true,
+          texto: true,
+          // 'correta' NÃO é selecionado propositalmente
+        },
+      },
+    },
+  })
+
+  // Formata no padrão consumido pelo frontend do Tribunal
+  const payloadFormatado = desafios.map((d) => ({
+    id: d.id,
+    code: d.codigo,
+    name: d.nome,
+    role: d.cargo,
+    shortLabel: d.rotuloCurto,
+    seatPosition: d.posicaoMesa,
+    avatarGradient: d.gradienteAvatar,
+    borderAccent: d.corBorda,
+    glowAccent: d.corBrilho,
+    badgeBg: d.corBadge,
+    type: d.tipo,
+    greeting: d.saudacao,
+    question: d.pergunta,
+    options: d.opcoes.map((opt) => ({
+      id: opt.opcaoId,
+      label: opt.rotulo,
+      text: opt.texto,
+    })),
+  }))
+
+  if (payloadFormatado.length > 0) {
+    desafiosCache = {
+      expiresAt: now + DESAFIOS_CACHE_TTL_MS,
+      data: payloadFormatado,
+    }
+  }
+
+  return payloadFormatado
+}
+
+export async function getTotalDesafiosCount() {
+  const lista = await obterDesafiosFormatados()
+  return lista.length > 0 ? lista.length : 7
+}
+
 // Exige sessão autenticada para acessar as perguntas internas da empresa
 router.use(requireAuth)
 
@@ -17,57 +120,7 @@ router.use(requireAuth)
  */
 router.get('/', async (_req, res) => {
   try {
-    const desafios = await prisma.desafio.findMany({
-      orderBy: { id: 'asc' },
-      select: {
-        id: true,
-        codigo: true,
-        nome: true,
-        cargo: true,
-        rotuloCurto: true,
-        posicaoMesa: true,
-        gradienteAvatar: true,
-        corBorda: true,
-        corBrilho: true,
-        corBadge: true,
-        tipo: true,
-        saudacao: true,
-        pergunta: true,
-        // 'mensagemAprovacao' NÃO é selecionado propositalmente (evita vazar gabarito antes do acerto)
-        opcoes: {
-          orderBy: { opcaoId: 'asc' },
-          select: {
-            opcaoId: true,
-            rotulo: true,
-            texto: true,
-            // 'correta' NÃO é selecionado propositalmente
-          },
-        },
-      },
-    })
-
-    // Formata no padrão consumido pelo frontend do Tribunal
-    const payloadFormatado = desafios.map((d) => ({
-      id: d.id,
-      code: d.codigo,
-      name: d.nome,
-      role: d.cargo,
-      shortLabel: d.rotuloCurto,
-      seatPosition: d.posicaoMesa,
-      avatarGradient: d.gradienteAvatar,
-      borderAccent: d.corBorda,
-      glowAccent: d.corBrilho,
-      badgeBg: d.corBadge,
-      type: d.tipo,
-      greeting: d.saudacao,
-      question: d.pergunta,
-      options: d.opcoes.map((opt) => ({
-        id: opt.opcaoId,
-        label: opt.rotulo,
-        text: opt.texto,
-      })),
-    }))
-
+    const payloadFormatado = await obterDesafiosFormatados()
     return res.json(payloadFormatado)
   } catch (error) {
     console.error('[desafios/listar] Erro:', error)

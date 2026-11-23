@@ -41,7 +41,7 @@ services:
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=jogofalavinha
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/jogofalavinha?schema=public
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/jogofalavinha?schema=public&connection_limit=30&pool_timeout=20
     depends_on:
       postgres:
         condition: service_healthy
