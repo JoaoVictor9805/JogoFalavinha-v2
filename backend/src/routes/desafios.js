@@ -4,32 +4,42 @@ import { requireAuth } from '../middleware/requireAuth.js'
 
 const router = Router()
 
-const DESAFIOS_CACHE_TTL_MS = 30000
+const DESAFIOS_CACHE_TTL_MS = 120000
 let desafiosCache = {
   expiresAt: 0,
   data: null,
 }
+let desafiosInFlight = null
 let gabaritoServerCache = {
   expiresAt: 0,
   map: null,
 }
+let gabaritoInFlight = null
 
 export async function getOpcaoDesafioServerSide(desafioId, opcaoId) {
   const now = Date.now()
   if (!gabaritoServerCache.map || gabaritoServerCache.expiresAt <= now) {
-    const opcoes = await prisma.opcaoDesafio.findMany({
-      include: { desafio: true },
-    })
-    const map = new Map()
-    for (const opt of opcoes) {
-      map.set(`${opt.desafioId}:${opt.opcaoId}`, opt)
+    if (!gabaritoInFlight) {
+      gabaritoInFlight = prisma.opcaoDesafio
+        .findMany({ include: { desafio: true } })
+        .then((opcoes) => {
+          const map = new Map()
+          for (const opt of opcoes) {
+            map.set(`${opt.desafioId}:${opt.opcaoId}`, opt)
+          }
+          if (map.size > 0) {
+            gabaritoServerCache = {
+              expiresAt: Date.now() + DESAFIOS_CACHE_TTL_MS,
+              map,
+            }
+          }
+          return map
+        })
+        .finally(() => {
+          gabaritoInFlight = null
+        })
     }
-    if (map.size > 0) {
-      gabaritoServerCache = {
-        expiresAt: now + DESAFIOS_CACHE_TTL_MS,
-        map,
-      }
-    }
+    const map = await gabaritoInFlight
     return map.get(`${desafioId}:${opcaoId}`) || null
   }
   return gabaritoServerCache.map.get(`${desafioId}:${opcaoId}`) || null
@@ -41,65 +51,73 @@ async function obterDesafiosFormatados() {
     return desafiosCache.data
   }
 
-  const desafios = await prisma.desafio.findMany({
-    orderBy: { id: 'asc' },
-    select: {
-      id: true,
-      codigo: true,
-      nome: true,
-      cargo: true,
-      rotuloCurto: true,
-      posicaoMesa: true,
-      gradienteAvatar: true,
-      corBorda: true,
-      corBrilho: true,
-      corBadge: true,
-      tipo: true,
-      saudacao: true,
-      pergunta: true,
-      // 'mensagemAprovacao' NÃO é selecionado propositalmente (evita vazar gabarito antes do acerto)
-      opcoes: {
-        orderBy: { opcaoId: 'asc' },
+  if (!desafiosInFlight) {
+    desafiosInFlight = prisma.desafio
+      .findMany({
+        orderBy: { id: 'asc' },
         select: {
-          opcaoId: true,
-          rotulo: true,
-          texto: true,
-          // 'correta' NÃO é selecionado propositalmente
+          id: true,
+          codigo: true,
+          nome: true,
+          cargo: true,
+          rotuloCurto: true,
+          posicaoMesa: true,
+          gradienteAvatar: true,
+          corBorda: true,
+          corBrilho: true,
+          corBadge: true,
+          tipo: true,
+          saudacao: true,
+          pergunta: true,
+          // 'mensagemAprovacao' NÃO é selecionado propositalmente (evita vazar gabarito antes do acerto)
+          opcoes: {
+            orderBy: { opcaoId: 'asc' },
+            select: {
+              opcaoId: true,
+              rotulo: true,
+              texto: true,
+              // 'correta' NÃO é selecionado propositalmente
+            },
+          },
         },
-      },
-    },
-  })
+      })
+      .then((desafios) => {
+        // Formata no padrão consumido pelo frontend do Tribunal
+        const payloadFormatado = desafios.map((d) => ({
+          id: d.id,
+          code: d.codigo,
+          name: d.nome,
+          role: d.cargo,
+          shortLabel: d.rotuloCurto,
+          seatPosition: d.posicaoMesa,
+          avatarGradient: d.gradienteAvatar,
+          borderAccent: d.corBorda,
+          glowAccent: d.corBrilho,
+          badgeBg: d.corBadge,
+          type: d.tipo,
+          greeting: d.saudacao,
+          question: d.pergunta,
+          options: d.opcoes.map((opt) => ({
+            id: opt.opcaoId,
+            label: opt.rotulo,
+            text: opt.texto,
+          })),
+        }))
 
-  // Formata no padrão consumido pelo frontend do Tribunal
-  const payloadFormatado = desafios.map((d) => ({
-    id: d.id,
-    code: d.codigo,
-    name: d.nome,
-    role: d.cargo,
-    shortLabel: d.rotuloCurto,
-    seatPosition: d.posicaoMesa,
-    avatarGradient: d.gradienteAvatar,
-    borderAccent: d.corBorda,
-    glowAccent: d.corBrilho,
-    badgeBg: d.corBadge,
-    type: d.tipo,
-    greeting: d.saudacao,
-    question: d.pergunta,
-    options: d.opcoes.map((opt) => ({
-      id: opt.opcaoId,
-      label: opt.rotulo,
-      text: opt.texto,
-    })),
-  }))
-
-  if (payloadFormatado.length > 0) {
-    desafiosCache = {
-      expiresAt: now + DESAFIOS_CACHE_TTL_MS,
-      data: payloadFormatado,
-    }
+        if (payloadFormatado.length > 0) {
+          desafiosCache = {
+            expiresAt: Date.now() + DESAFIOS_CACHE_TTL_MS,
+            data: payloadFormatado,
+          }
+        }
+        return payloadFormatado
+      })
+      .finally(() => {
+        desafiosInFlight = null
+      })
   }
 
-  return payloadFormatado
+  return desafiosInFlight
 }
 
 export async function getTotalDesafiosCount() {
