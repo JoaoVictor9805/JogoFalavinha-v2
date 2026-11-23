@@ -454,7 +454,7 @@ export const CEO_TRIBUNAL_BRIEFING = {
   name: 'Jhonny',
   title: 'CEO · Presidente do Conselho',
   message:
-    'Seja bem-vindo ao Conselho Next! Logo adiante, estarão os 7 conselheiros que decidiram fazer parte dessa sua avaliação. Você poderá conversar com eles na ordem que preferir... mas não se engane: todos estarão de olho nas suas respostas, e isso vai decidir o seu futuro por aqui. Cada aprovação garante 1 selo oficial daquele conselheiro — e você só poderá sair do Conselho quando conquistar os 7 selos, avançando passo a passo no labirinto até alcançar a sala do cliente. O seu desempenho será medido pelo tempo total de prova — e, atenção, cada erro somará +5s ao relógio. Se errar 3 vezes na mesma cadeira, você levará +10s, precisará refazer a questão e aquele conselheiro só voltará a te receber depois de 20s. Mas calma, nem tudo é notícia ruim... Acertar 3 conselheiros seguidos de primeira garante -5s de bônus, e fechar o Conselho invicto rende mais -10s extras! Agora é por sua própria conta e risco: abra o labirinto e comece o desafio.',
+    'Bem-vindo ao Conselho Next! Você compete com os outros funcionários para concluir o desafio no menor tempo possível. Como funciona: fale com os 7 conselheiros na ordem que preferir — cada acerto libera 1 selo e faz você avançar até a sala do cliente. Atenção ao relógio: cada erro soma +5s; com 3 erros no mesmo conselheiro, você leva +10s, aguarda 20s e pega uma nova pergunta. Dica de bônus: acertar 3 seguidos de primeira garante -5s, e fechar os 7 sem errar garante mais -10s. Abra o labirinto e comece!',
 }
 
 /**
