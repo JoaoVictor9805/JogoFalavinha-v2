@@ -1,6 +1,7 @@
 FROM node:20-alpine AS base
 
 WORKDIR /app
+ENV UV_THREADPOOL_SIZE=6
 
 FROM base AS dev
 COPY package*.json ./

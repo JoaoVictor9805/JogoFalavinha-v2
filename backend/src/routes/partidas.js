@@ -16,9 +16,16 @@ import {
   estimarDuracaoLeituraAprovacaoMs,
 } from '../utils/gameRules.js'
 import { logSecurityEvent } from '../utils/securityLogger.js'
+import { getOpcaoDesafioServerSide, getTotalDesafiosCount } from './desafios.js'
 import { invalidateRankingCache } from './ranking.js'
 
 const router = Router()
+
+// Margem segura para fila de pool sob picos de 200+ usuários simultâneos
+const TX_OPTIONS = {
+  maxWait: 20000,
+  timeout: 30000,
+}
 
 // Todas as rotas de partida exigem sessão autenticada
 router.use(requireAuth)
@@ -266,7 +273,7 @@ router.post('/iniciar', async (req, res) => {
           partida: novaPartida,
         },
       }
-    })
+    }, TX_OPTIONS)
 
     return res.status(outcome.httpStatus).json(outcome.payload)
   } catch (error) {
@@ -423,7 +430,7 @@ router.post('/:id/iniciar-cronometro', async (req, res) => {
           segundosReais: 0,
         },
       }
-    })
+    }, TX_OPTIONS)
 
     return res.status(outcome.httpStatus).json(outcome.payload)
   } catch (error) {
@@ -556,15 +563,7 @@ router.post('/:id/validar', async (req, res) => {
         }
       }
 
-      const opcao = await tx.opcaoDesafio.findUnique({
-        where: {
-          desafioId_opcaoId: {
-            desafioId: membroNum,
-            opcaoId: opcaoStr,
-          },
-        },
-        include: { desafio: true },
-      })
+      const opcao = await getOpcaoDesafioServerSide(membroNum, opcaoStr)
 
       if (!opcao) {
         return { httpStatus: 404, payload: { erro: 'Alternativa não encontrada para este desafio.' } }
@@ -619,8 +618,7 @@ router.post('/:id/validar', async (req, res) => {
           where: { partidaId: partida.id, membroId: membroNum },
         })
 
-        const totalDesafiosBanco = await tx.desafio.count()
-        const totalDesafios = totalDesafiosBanco > 0 ? totalDesafiosBanco : 7
+        const totalDesafios = await getTotalDesafiosCount()
 
         const novosMembros = Array.from(new Set([...partida.membrosConcluidos, membroNum]))
         const proximoPasso = novosMembros.length
@@ -812,7 +810,7 @@ router.post('/:id/validar', async (req, res) => {
           partida: partidaAtualizada,
         },
       }
-    })
+    }, TX_OPTIONS)
 
     if (outcome.suspiciousFastAnswer) {
       logSecurityEvent('SUSPICIOUS_FAST_ANSWER', {
@@ -930,7 +928,7 @@ router.post('/:id/sincronizar-tempo', async (req, res) => {
           cronometroPausado,
         },
       }
-    })
+    }, TX_OPTIONS)
 
     return res.status(outcome.httpStatus).json(outcome.payload)
   } catch (error) {
@@ -1016,7 +1014,7 @@ router.post('/:id/retomar-cronometro', async (req, res) => {
           cronometroPausado: false,
         },
       }
-    })
+    }, TX_OPTIONS)
 
     return res.status(outcome.httpStatus).json(outcome.payload)
   } catch (error) {

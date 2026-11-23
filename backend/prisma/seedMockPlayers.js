@@ -1,4 +1,4 @@
-import bcrypt from 'bcryptjs'
+import bcrypt from 'bcrypt'
 import prisma from '../src/db.js'
 
 const MOCK_DEFAULT_PASSWORD = 'Falavinha@2026'
