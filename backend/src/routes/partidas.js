@@ -472,6 +472,16 @@ router.post('/:id/validar', async (req, res) => {
       : []
     const evitarCruzadaFlag = Boolean(evitarCruzada)
 
+    // Lê gabarito e total de desafios ANTES da transação para evitar usar conexão extra do pool dentro do lock
+    const [opcao, totalDesafios] = await Promise.all([
+      getOpcaoDesafioServerSide(membroNum, opcaoStr),
+      getTotalDesafiosCount(),
+    ])
+
+    if (!opcao) {
+      return res.status(404).json({ erro: 'Alternativa não encontrada para este desafio.' })
+    }
+
     const outcome = await prisma.$transaction(async (tx) => {
       // Lock de linha na partida evita condições de corrida entre cliques/abas simultâneas
       const lockedRows = await tx.$queryRaw`
@@ -563,12 +573,6 @@ router.post('/:id/validar', async (req, res) => {
         }
       }
 
-      const opcao = await getOpcaoDesafioServerSide(membroNum, opcaoStr)
-
-      if (!opcao) {
-        return { httpStatus: 404, payload: { erro: 'Alternativa não encontrada para este desafio.' } }
-      }
-
       // Impede reaplicação de penalidade caso uma opção já descartada no ciclo seja reenviada
       const jaDesabilitada = partida.opcoesDesabilitadas.some(
         (o) => o.membroId === membroNum && o.opcaoId === opcaoStr
@@ -617,8 +621,6 @@ router.post('/:id/validar', async (req, res) => {
         await tx.opcaoDesabilitada.deleteMany({
           where: { partidaId: partida.id, membroId: membroNum },
         })
-
-        const totalDesafios = await getTotalDesafiosCount()
 
         const novosMembros = Array.from(new Set([...partida.membrosConcluidos, membroNum]))
         const proximoPasso = novosMembros.length

@@ -2,7 +2,7 @@ import { isValidUuid } from '../data/constantes.js'
 import prisma from '../db.js'
 import { SESSION_COOKIE_NAME, clearSessionCookie, verifySessionToken } from '../utils/jwt.js'
 
-const TOKEN_VERSION_CACHE_TTL_MS = 10000
+const TOKEN_VERSION_CACHE_TTL_MS = 60000
 const TOKEN_VERSION_CACHE_MAX_SIZE = 5000
 const tokenVersionCache = new Map()
 
@@ -38,18 +38,27 @@ export async function requireAuth(req, res, next) {
     })
   }
 
+  let decoded
   try {
-    const decoded = verifySessionToken(token)
-    const jogadorId = decoded?.sub
-    const tokenVersion = decoded?.tv
+    decoded = verifySessionToken(token)
+  } catch {
+    clearSessionCookie(res)
+    return res.status(401).json({
+      erro: 'Sessão expirada ou inválida. Faça login novamente.',
+    })
+  }
 
-    if (!isValidUuid(jogadorId) || !Number.isInteger(tokenVersion)) {
-      clearSessionCookie(res)
-      return res.status(401).json({
-        erro: 'Sessão inválida. Faça login novamente.',
-      })
-    }
+  const jogadorId = decoded?.sub
+  const tokenVersion = decoded?.tv
 
+  if (!isValidUuid(jogadorId) || !Number.isInteger(tokenVersion)) {
+    clearSessionCookie(res)
+    return res.status(401).json({
+      erro: 'Sessão inválida. Faça login novamente.',
+    })
+  }
+
+  try {
     const now = Date.now()
     const cached = tokenVersionCache.get(jogadorId)
 
@@ -84,10 +93,10 @@ export async function requireAuth(req, res, next) {
     req.jogadorId = jogadorId
     req.tokenVersion = resolvedTokenVersion
     return next()
-  } catch {
-    clearSessionCookie(res)
-    return res.status(401).json({
-      erro: 'Sessão expirada ou inválida. Faça login novamente.',
+  } catch (error) {
+    console.error('[requireAuth] Erro ao validar sessão no banco:', error?.message || error)
+    return res.status(503).json({
+      erro: 'Serviço temporariamente ocupado. Tente novamente em instantes.',
     })
   }
 }
