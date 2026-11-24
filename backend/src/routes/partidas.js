@@ -39,7 +39,7 @@ const JOGADOR_PUBLIC_SELECT = {
   genero: true,
 }
 
-const PARTIDA_INCLUDE = {
+const PARTIDA_VALIDAR_INCLUDE = {
   opcoesDesabilitadas: true,
   bloqueios: true,
   tentativas: {
@@ -49,6 +49,10 @@ const PARTIDA_INCLUDE = {
       penalidadeAplicada: true,
     },
   },
+}
+
+const PARTIDA_INCLUDE = {
+  ...PARTIDA_VALIDAR_INCLUDE,
   jogador: {
     select: JOGADOR_PUBLIC_SELECT,
   },
@@ -617,10 +621,15 @@ router.post('/:id/validar', async (req, res) => {
           },
         })
 
-        // Limpa eventuais opções desabilitadas deste membro ao aprovar
-        await tx.opcaoDesabilitada.deleteMany({
-          where: { partidaId: partida.id, membroId: membroNum },
-        })
+        // Limpa eventuais opções desabilitadas deste membro apenas se existirem neste ciclo
+        const possuiOpcoesDesabilitadasNoMembro = partida.opcoesDesabilitadas.some(
+          (o) => o.membroId === membroNum
+        )
+        if (possuiOpcoesDesabilitadasNoMembro) {
+          await tx.opcaoDesabilitada.deleteMany({
+            where: { partidaId: partida.id, membroId: membroNum },
+          })
+        }
 
         const novosMembros = Array.from(new Set([...partida.membrosConcluidos, membroNum]))
         const proximoPasso = novosMembros.length
@@ -676,7 +685,7 @@ router.post('/:id/validar', async (req, res) => {
         const partidaAtualizada = await tx.partida.update({
           where: { id: partida.id },
           data: dadosAtualizacao,
-          include: PARTIDA_INCLUDE,
+          include: PARTIDA_VALIDAR_INCLUDE,
         })
 
         return {
@@ -787,7 +796,7 @@ router.post('/:id/validar', async (req, res) => {
           pausaMaximaAte: null,
           ultimoSyncEm: now,
         },
-        include: PARTIDA_INCLUDE,
+        include: PARTIDA_VALIDAR_INCLUDE,
       })
 
       return {
@@ -846,10 +855,13 @@ router.post('/:id/validar', async (req, res) => {
   }
 })
 
+const SYNC_PERSIST_INTERVAL_MS = 30000
+
 /**
  * POST /api/partidas/:id/sincronizar-tempo
  * Sincroniza o cronômetro utilizando exclusivamente o tempo calculado pelo servidor.
  * Ignora qualquer valor enviado pelo cliente para fins de cálculo oficial.
+ * Usa caminho rápido somente-leitura (sem lock/UPDATE) quando não há pausa expirada nem defasagem >= 30s.
  */
 router.post('/:id/sincronizar-tempo', async (req, res) => {
   try {
@@ -857,6 +869,62 @@ router.post('/:id/sincronizar-tempo', async (req, res) => {
 
     if (!isValidUuid(id)) {
       return res.status(400).json({ erro: 'ID da partida inválido.' })
+    }
+
+    const partidaLeve = await prisma.partida.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        jogadorId: true,
+        status: true,
+        cronometroIniciadoEm: true,
+        ultimoSyncEm: true,
+        pausaMsAcumulados: true,
+        pausadoDesde: true,
+        pausaMaximaAte: true,
+        segundosReais: true,
+        segundosPenalidade: true,
+        segundosBonus: true,
+      },
+    })
+
+    if (!partidaLeve) {
+      return res.status(404).json({ erro: 'Partida não encontrada.' })
+    }
+
+    if (partidaLeve.jogadorId !== req.jogadorId) {
+      return res.status(403).json({ erro: 'Você não tem permissão para atualizar esta partida.' })
+    }
+
+    if (partidaLeve.status !== 'EM_ANDAMENTO' || !partidaLeve.cronometroIniciadoEm) {
+      return res.status(200).json({ ok: false })
+    }
+
+    const nowLeitura = new Date()
+    const pausaExpirouLeitura =
+      Boolean(partidaLeve.pausadoDesde && partidaLeve.pausaMaximaAte) &&
+      nowLeitura >= partidaLeve.pausaMaximaAte
+    const syncDefasado =
+      !partidaLeve.ultimoSyncEm ||
+      nowLeitura.getTime() - partidaLeve.ultimoSyncEm.getTime() >= SYNC_PERSIST_INTERVAL_MS
+
+    if (!pausaExpirouLeitura && !syncDefasado) {
+      const cronometroPausado =
+        Boolean(partidaLeve.pausadoDesde && partidaLeve.pausaMaximaAte) &&
+        nowLeitura < partidaLeve.pausaMaximaAte
+      const segundosSeguros = calcularTempoServidor({ partida: partidaLeve, now: nowLeitura })
+      const segundosTotais = calcularSegundosTotais({
+        segundosReais: segundosSeguros,
+        segundosPenalidade: partidaLeve.segundosPenalidade,
+        segundosBonus: partidaLeve.segundosBonus,
+      })
+
+      return res.status(200).json({
+        ok: true,
+        segundosReais: segundosSeguros,
+        segundosTotais,
+        cronometroPausado,
+      })
     }
 
     const outcome = await prisma.$transaction(async (tx) => {
@@ -950,6 +1018,51 @@ router.post('/:id/retomar-cronometro', async (req, res) => {
 
     if (!isValidUuid(id)) {
       return res.status(400).json({ erro: 'ID da partida inválido.' })
+    }
+
+    const partidaLeve = await prisma.partida.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        jogadorId: true,
+        status: true,
+        cronometroIniciadoEm: true,
+        pausaMsAcumulados: true,
+        pausadoDesde: true,
+        pausaMaximaAte: true,
+        segundosReais: true,
+        segundosPenalidade: true,
+        segundosBonus: true,
+      },
+    })
+
+    if (!partidaLeve) {
+      return res.status(404).json({ erro: 'Partida não encontrada.' })
+    }
+
+    if (partidaLeve.jogadorId !== req.jogadorId) {
+      return res.status(403).json({ erro: 'Você não tem permissão para atualizar esta partida.' })
+    }
+
+    if (partidaLeve.status !== 'EM_ANDAMENTO' || !partidaLeve.cronometroIniciadoEm) {
+      return res.status(200).json({ ok: false, cronometroPausado: false })
+    }
+
+    if (!partidaLeve.pausadoDesde || !partidaLeve.pausaMaximaAte) {
+      const nowLeitura = new Date()
+      const segundosSeguros = calcularTempoServidor({ partida: partidaLeve, now: nowLeitura })
+      const segundosTotais = calcularSegundosTotais({
+        segundosReais: segundosSeguros,
+        segundosPenalidade: partidaLeve.segundosPenalidade,
+        segundosBonus: partidaLeve.segundosBonus,
+      })
+      return res.status(200).json({
+        ok: true,
+        segundosReais: segundosSeguros,
+        segundosTotais,
+        pausaConcluidaMs: 0,
+        cronometroPausado: false,
+      })
     }
 
     const outcome = await prisma.$transaction(async (tx) => {

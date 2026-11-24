@@ -5,19 +5,12 @@ import express from 'express'
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
 import helmet from 'helmet'
 import { createCsrfProtection, isOriginAuthorized } from './middleware/csrfProtection.js'
+import { resolveSessionFromRequest } from './middleware/requireAuth.js'
 import apiRouter from './routes/index.js'
-import { SESSION_COOKIE_NAME, verifySessionToken } from './utils/jwt.js'
 import { logSecurityEvent } from './utils/securityLogger.js'
 
 function getAuthenticatedUserId(req) {
-  const token = req.cookies?.[SESSION_COOKIE_NAME]
-  if (!token) return null
-  try {
-    const decoded = verifySessionToken(token)
-    return typeof decoded?.sub === 'string' ? decoded.sub : null
-  } catch {
-    return null
-  }
+  return resolveSessionFromRequest(req).jogadorId
 }
 
 function getNormalizedEmailFromBody(req) {
@@ -169,11 +162,60 @@ export function createApp() {
     }),
   })
 
+  // Proteção nos envios/reenvios de código OTP (cadastro e recuperação de senha) por (IP + e-mail) e global por e-mail
+  const otpSendAccountLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 6,
+    keyGenerator: (req) => {
+      const ipKey = ipKeyGenerator(req.ip || '127.0.0.1')
+      const email = getNormalizedEmailFromBody(req)
+      return email ? `${ipKey}:${email}` : ipKey
+    },
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    handler: createRateLimitHandler('otp_send_ip_email', {
+      erro: 'Muitas solicitações de código para este e-mail. Aguarde alguns minutos e tente novamente.',
+    }),
+  })
+
+  const otpSendEmailGlobalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 12,
+    skip: (req) => !getNormalizedEmailFromBody(req),
+    keyGenerator: (req) => `otp-send:${getNormalizedEmailFromBody(req)}`,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    handler: createRateLimitHandler('otp_send_email_global', {
+      erro: 'Este e-mail atingiu o limite temporário de envios de código. Aguarde alguns minutos.',
+    }),
+  })
+
+  // Proteção anti brute-force na validação de códigos de 6 dígitos (por IP + e-mail)
+  const otpVerifyLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 15,
+    skipSuccessfulRequests: true,
+    keyGenerator: (req) => {
+      const ipKey = ipKeyGenerator(req.ip || '127.0.0.1')
+      const email = getNormalizedEmailFromBody(req)
+      return email ? `${ipKey}:${email}` : ipKey
+    },
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    handler: createRateLimitHandler('otp_verify_ip_email', {
+      erro: 'Muitas tentativas incorretas de código para este e-mail. Aguarde 15 minutos e tente novamente.',
+    }),
+  })
+
   const csrfProtection = createCsrfProtection(allowedOrigins)
 
   app.use('/api', ipFloodLimiter, csrfProtection, userSessionLimiter)
   app.use('/api/auth/login', loginAccountLimiter, loginEmailGlobalLimiter)
   app.use('/api/auth/cadastrar', registerEmailLimiter, registerIpCeilingLimiter)
+  app.use('/api/auth/reenviar-codigo-cadastro', otpSendAccountLimiter, otpSendEmailGlobalLimiter)
+  app.use('/api/auth/esqueci-senha', otpSendAccountLimiter, otpSendEmailGlobalLimiter)
+  app.use('/api/auth/verificar-email', otpVerifyLimiter)
+  app.use('/api/auth/redefinir-senha', otpVerifyLimiter)
 
   app.use('/api', apiRouter)
 

@@ -34,6 +34,13 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET com pelo menos 32 caracteres}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
       DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL do PostgreSQL de producao}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      OTP_SECRET: ${OTP_SECRET:-}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s

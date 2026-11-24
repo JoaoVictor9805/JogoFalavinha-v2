@@ -35,7 +35,9 @@ export function logSecurityEvent(event, details = {}) {
     event === 'CSRF_BLOCKED' ||
     event === 'RATE_LIMIT_EXCEEDED' ||
     event === 'SUSPICIOUS_COMPLETION_TIME' ||
-    event === 'SUSPICIOUS_FAST_ANSWER'
+    event === 'SUSPICIOUS_FAST_ANSWER' ||
+    event === 'EMAIL_VERIFICATION_FAILED' ||
+    event === 'PASSWORD_RESET_FAILED'
   ) {
     console.warn(`[SECURITY_AUDIT] ${JSON.stringify(entry)}`)
   } else {

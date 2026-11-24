@@ -13,12 +13,28 @@ const MIN_QUORUM = 3
 
 // Cache curto em memória para reduzir carga no banco em horários de pico
 const RANKING_CACHE_TTL_MS = 5000
+const RANKING_MIN_RECOMPUTE_INTERVAL_MS = 2000
 let rankingCache = {
   expiresAt: 0,
   data: null,
 }
+let rankingInFlight = null
+let rankingCacheVersion = 0
+let lastRankingComputeAt = 0
 
 export function invalidateRankingCache() {
+  const now = Date.now()
+  if (rankingCache.data && now - lastRankingComputeAt < RANKING_MIN_RECOMPUTE_INTERVAL_MS) {
+    // Em ondas de conclusão simultânea, limita a recomputação a no máximo 1x a cada 2s
+    rankingCache.expiresAt = Math.min(
+      rankingCache.expiresAt,
+      lastRankingComputeAt + RANKING_MIN_RECOMPUTE_INTERVAL_MS
+    )
+    return
+  }
+
+  rankingCacheVersion += 1
+  rankingInFlight = null
   rankingCache = {
     expiresAt: 0,
     data: null,
@@ -29,6 +45,7 @@ export function invalidateRankingCache() {
  * Busca diretamente no PostgreSQL via `DISTINCT ON (jogador_id)` apenas
  * o MELHOR TEMPO (Personal Record) de cada colaborador único, já ordenado
  * pelo critério oficial (segundosTotais -> segundosReais -> totalErros -> finalizadoEm).
+ * Usa trava `rankingInFlight` para evitar cache stampede quando o cache expira no pico.
  */
 async function obterMelhoresPartidasPorJogador() {
   const now = Date.now()
@@ -36,43 +53,57 @@ async function obterMelhoresPartidasPorJogador() {
     return rankingCache.data
   }
 
-  const melhoresPartidas = await prisma.$queryRaw`
-    SELECT * FROM (
-      SELECT DISTINCT ON (p."jogador_id")
-        p."jogador_id" AS "jogadorId",
-        p."segundos_reais" AS "segundosReais",
-        p."segundos_penalidade" AS "segundosPenalidade",
-        p."segundos_bonus" AS "segundosBonus",
-        p."segundos_totais" AS "segundosTotais",
-        p."total_erros" AS "totalErros",
-        p."total_combos" AS "totalCombos",
-        p."finalizado_em" AS "finalizadoEm",
-        j."nome" AS "nome",
-        j."unidade" AS "unidade",
-        j."setor" AS "setor"
-      FROM "partidas" p
-      INNER JOIN "jogadores" j ON j."id" = p."jogador_id"
-      WHERE p."status" = 'CONCLUIDA'
+  if (!rankingInFlight) {
+    const versionAtStart = rankingCacheVersion
+    rankingInFlight = prisma.$queryRaw`
+      SELECT * FROM (
+        SELECT DISTINCT ON (p."jogador_id")
+          p."jogador_id" AS "jogadorId",
+          p."segundos_reais" AS "segundosReais",
+          p."segundos_penalidade" AS "segundosPenalidade",
+          p."segundos_bonus" AS "segundosBonus",
+          p."segundos_totais" AS "segundosTotais",
+          p."total_erros" AS "totalErros",
+          p."total_combos" AS "totalCombos",
+          p."finalizado_em" AS "finalizadoEm",
+          j."nome" AS "nome",
+          j."unidade" AS "unidade",
+          j."setor" AS "setor"
+        FROM "partidas" p
+        INNER JOIN "jogadores" j ON j."id" = p."jogador_id"
+        WHERE p."status" = 'CONCLUIDA'
+        ORDER BY
+          p."jogador_id",
+          p."segundos_totais" ASC,
+          p."segundos_reais" ASC,
+          p."total_erros" ASC,
+          p."finalizado_em" ASC
+      ) AS melhores
       ORDER BY
-        p."jogador_id",
-        p."segundos_totais" ASC,
-        p."segundos_reais" ASC,
-        p."total_erros" ASC,
-        p."finalizado_em" ASC
-    ) AS melhores
-    ORDER BY
-      melhores."segundosTotais" ASC,
-      melhores."segundosReais" ASC,
-      melhores."totalErros" ASC,
-      melhores."finalizadoEm" ASC
-  `
-
-  rankingCache = {
-    expiresAt: now + RANKING_CACHE_TTL_MS,
-    data: melhoresPartidas,
+        melhores."segundosTotais" ASC,
+        melhores."segundosReais" ASC,
+        melhores."totalErros" ASC,
+        melhores."finalizadoEm" ASC
+    `
+      .then((melhoresPartidas) => {
+        if (versionAtStart === rankingCacheVersion) {
+          const computedAt = Date.now()
+          lastRankingComputeAt = computedAt
+          rankingCache = {
+            expiresAt: computedAt + RANKING_CACHE_TTL_MS,
+            data: melhoresPartidas,
+          }
+        }
+        return melhoresPartidas
+      })
+      .finally(() => {
+        if (versionAtStart === rankingCacheVersion) {
+          rankingInFlight = null
+        }
+      })
   }
 
-  return melhoresPartidas
+  return rankingInFlight
 }
 
 /**
