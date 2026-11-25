@@ -1,0 +1,25 @@
+# Deploy do frontend (Nginx + React) do JogoFalavinha-v2 no Coolify (homologação / produção).
+# Este serviço recebe o domínio HTTPS público no Coolify apontando para a porta 80.
+# As requisições para /api/ são encaminhadas internamente pelo Nginx para BACKEND_URL.
+services:
+  frontend:
+    image: jogofalavinha-v2-frontend:${IMAGE_TAG:-homol}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+      args:
+        VITE_API_URL: /api
+    restart: unless-stopped
+    expose:
+      - '80'
+    environment:
+      # Endereço interno do serviço backend na rede do Coolify (SEM barra no final).
+      # Exemplo: http://nome-do-servico-backend:3000
+      BACKEND_URL: ${BACKEND_URL:-http://backend:3000}
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

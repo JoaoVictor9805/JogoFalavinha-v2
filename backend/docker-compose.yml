@@ -1,0 +1,37 @@
+# Deploy do backend (API) do JogoFalavinha-v2 no Coolify (homologação / produção).
+# Os valores vêm das variáveis de ambiente cadastradas no Coolify:
+#   ${VAR}         = informada no Coolify
+#   ${VAR:-padrão} = opcional, com valor padrão
+# Não use ${VAR:?}: o Coolify monta este arquivo no build só com as variáveis marcadas para o build,
+# e uma obrigatória de execução (ex.: JWT_SECRET ou DATABASE_URL) derruba o deploy.
+# A validação obrigatória de JWT_SECRET acontece ao subir a API (src/utils/jwt.js), e a de
+# DATABASE_URL acontece no Prisma (migrate deploy / seed), exibindo o erro direto no log.
+# A porta 3000 não é publicada no host nem ganha domínio: só o frontend (nginx) fala com a API
+# pela rede interna do Coolify (BACKEND_URL do frontend apontando para este serviço na porta 3000).
+services:
+  backend:
+    image: jogofalavinha-v2-backend:${IMAGE_TAG:-homol}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+    restart: unless-stopped
+    expose:
+      - '3000'
+    environment:
+      NODE_ENV: production
+      # Endereço HTTPS público do frontend (ex.: https://homol-conselhonext.falavinha.com.br).
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}
+      TRUST_PROXY: ${TRUST_PROXY:-loopback,linklocal,uniquelocal}
+      # Segredo JWT (>= 32 caracteres). Validado na inicialização em src/utils/jwt.js.
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+      # Banco de dados (PostgreSQL do Coolify, URL interna). Migrations e seed rodam ao iniciar.
+      DATABASE_URL: ${DATABASE_URL}
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Tempo para as migrations e seed rodarem antes da primeira verificação.
+      start_period: 60s
