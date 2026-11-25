@@ -18,7 +18,7 @@ Para que os avaliadores consigam acessar e testar o sistema completo desde já, 
 
 ## Como Criar esse Usuário no Banco de Produção (Coolify)
 
-Após subir o projeto com o `docker-compose.prod.yml`, abra o terminal do container **`backend`** no painel do Coolify (ou via SSH na VPS) e execute:
+Após subir o projeto com o `docker-compose.yml`, abra o terminal do container **`backend`** no painel do Coolify (ou via SSH na VPS) e execute:
 
 ```sh
 node prisma/criarUsuarioTeste.js
