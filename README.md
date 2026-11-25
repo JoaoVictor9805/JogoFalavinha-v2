@@ -8,7 +8,8 @@ Aplicação web full-stack do **Conselho Next** com **React (Vite + Three.js + T
 
 ```text
 JogoFalavinha-v2/
-├── docker-compose.yml            # Orquestra PostgreSQL, Backend Express e Frontend Vite (ambiente dev)
+├── docker-compose.yml            # Orquestra Backend Express, Frontend Nginx e PostgreSQL opcional (produção / Coolify)
+├── docker-compose.dev.yml        # Orquestra PostgreSQL, Backend Express e Frontend Vite (ambiente dev)
 ├── backend/
 │   ├── prisma/
 │   │   ├── schema.prisma         # Modelos: Jogador, Partida, Desafio, OpcaoDesafio, Tentativa, Bloqueio
@@ -48,7 +49,7 @@ JogoFalavinha-v2/
 ## Executando em Desenvolvimento (Docker)
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.dev.yml up -d --build
 ```
 
 - **Frontend:** `http://localhost:5174`

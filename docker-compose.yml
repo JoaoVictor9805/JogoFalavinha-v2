@@ -1,78 +1,66 @@
 services:
+  # Opcional: ative com COMPOSE_PROFILES=db caso o banco rode dentro deste mesmo Compose
   postgres:
     image: postgres:16-alpine
-    container_name: jogofalavinha_v2_postgres
+    profiles: ["db"]
     restart: unless-stopped
-    ports:
-      - "5433:5432"
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=jogofalavinha
+      POSTGRES_USER: ${POSTGRES_USER:-falavinha_homol}
+      # Se ativar COMPOSE_PROFILES=db, defina POSTGRES_PASSWORD nas variáveis do servidor (o Postgres recusa subir sem senha)
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-jogofalavinha_homol}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_homol_data:/var/lib/postgresql/data
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres -d jogofalavinha" ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-falavinha_homol} -d ${POSTGRES_DB:-jogofalavinha_homol}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   backend:
+    image: jogofalavinha-v2-backend:homol
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: dev
-    container_name: jogofalavinha_v2_backend
+      target: prod
     restart: unless-stopped
-    ports:
-      - "3001:3001"
-    volumes:
-      - ./backend:/app
-      - backend_node_modules:/app/node_modules
+    expose:
+      - "3001"
     environment:
-      - NODE_ENV=development
-      - PORT=3001
-      - FRONTEND_ORIGIN=http://localhost:5174
-      - TRUST_PROXY=loopback,linklocal,uniquelocal
-      - JWT_SECRET=dev-falavinha-next-jwt-secret-change-in-prod
-      - JWT_EXPIRES_IN=24h
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=jogofalavinha
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/jogofalavinha?schema=public&connection_limit=50&pool_timeout=30
-    depends_on:
-      postgres:
-        condition: service_healthy
+      NODE_ENV: production
+      PORT: 3001
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?Defina FRONTEND_ORIGIN com a URL HTTPS de homologacao}
+      TRUST_PROXY: ${TRUST_PROXY:-loopback,linklocal,uniquelocal}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET com pelo menos 32 caracteres}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL do PostgreSQL de homologacao}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 15s
+      start_period: 20s
 
   frontend:
+    image: jogofalavinha-v2-frontend:homol
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: dev
-    container_name: jogofalavinha_v2_frontend
+      target: prod
+      args:
+        VITE_API_URL: /api
     restart: unless-stopped
-    ports:
-      - "5174:5174"
-    volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
-    environment:
-      - WATCHPACK_POLLING=true
-      - CHOKIDAR_USEPOLLING=true
-      - API_PROXY_TARGET=http://backend:3001
+    expose:
+      - "80"
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
 
 volumes:
-  frontend_node_modules:
-  backend_node_modules:
-  postgres_data:
+  postgres_homol_data:
