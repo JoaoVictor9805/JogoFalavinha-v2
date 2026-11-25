@@ -17,14 +17,6 @@ services:
       timeout: 5s
       retries: 5
 
-  mailpit:
-    image: axllent/mailpit:latest
-    container_name: jogofalavinha_v2_mailpit
-    restart: unless-stopped
-    ports:
-      - "1025:1025"
-      - "8025:8025"
-
   backend:
     build:
       context: ./backend
@@ -50,17 +42,9 @@ services:
       - DB_PORT=5432
       - DB_NAME=jogofalavinha
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/jogofalavinha?schema=public&connection_limit=50&pool_timeout=30
-      - SMTP_HOST=${SMTP_HOST:-mailpit}
-      - SMTP_PORT=${SMTP_PORT:-1025}
-      - SMTP_SECURE=${SMTP_SECURE:-false}
-      - SMTP_USER=${SMTP_USER:-}
-      - SMTP_PASS=${SMTP_PASS:-}
-      - SMTP_FROM=${SMTP_FROM:-Conselho Next Falavinha <no-reply@falavinha.com.br>}
     depends_on:
       postgres:
         condition: service_healthy
-      mailpit:
-        condition: service_started
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3001/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 5s

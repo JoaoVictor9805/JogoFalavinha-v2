@@ -49,36 +49,8 @@ export const apiService = {
     })
   },
 
-  async verificarEmail(dados) {
-    return request('/auth/verificar-email', {
-      method: 'POST',
-      body: JSON.stringify(dados),
-    })
-  },
-
-  async reenviarCodigoCadastro(dados) {
-    return request('/auth/reenviar-codigo-cadastro', {
-      method: 'POST',
-      body: JSON.stringify(dados),
-    })
-  },
-
   async login(dados) {
     return request('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(dados),
-    })
-  },
-
-  async esqueciSenha(dados) {
-    return request('/auth/esqueci-senha', {
-      method: 'POST',
-      body: JSON.stringify(dados),
-    })
-  },
-
-  async redefinirSenha(dados) {
-    return request('/auth/redefinir-senha', {
       method: 'POST',
       body: JSON.stringify(dados),
     })

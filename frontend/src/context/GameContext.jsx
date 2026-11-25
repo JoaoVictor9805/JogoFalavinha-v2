@@ -563,35 +563,9 @@ export function GameProvider({ children }) {
     [registerTimeout]
   )
 
-  // 1A. Iniciar cadastro (envia código de 6 dígitos para o e-mail corporativo)
-  const registerAccount = useCallback(async (formData) => {
-    setAuthError('')
-    setActionError('')
-    lockRef.current = true
-    setIsLocked(true)
-
-    try {
-      const cadRes = await apiService.cadastrar({
-        nome: formData.nome,
-        email: formData.email,
-        unidade: formData.unidade,
-        setor: formData.setor,
-        genero: formData.genero || 'masculino',
-        senha: formData.senha,
-      })
-      return cadRes
-    } catch (err) {
-      setAuthError(err.message || 'Não foi possível concluir seu cadastro. Tente novamente.')
-      throw err
-    } finally {
-      lockRef.current = false
-      setIsLocked(false)
-    }
-  }, [])
-
-  // 1A-2. Confirmar código enviado por e-mail e iniciar a primeira partida
-  const verifyEmailAndStartGame = useCallback(
-    async ({ email, codigo }) => {
+  // 1A. Realizar cadastro e iniciar a primeira partida imediatamente
+  const registerAndStart = useCallback(
+    async (formData) => {
       setAuthError('')
       setActionError('')
       lockRef.current = true
@@ -601,8 +575,15 @@ export function GameProvider({ children }) {
         clearAllTimeouts()
         resetCrossTalkHistory()
 
-        const verifyRes = await apiService.verificarEmail({ email, codigo })
-        const jogador = verifyRes.jogador
+        const cadRes = await apiService.cadastrar({
+          nome: formData.nome,
+          email: formData.email,
+          unidade: formData.unidade,
+          setor: formData.setor,
+          genero: formData.genero || 'masculino',
+          senha: formData.senha,
+        })
+        const jogador = cadRes.jogador
         setPlayer(jogador)
 
         const [shuffled, partidaRes] = await Promise.all([
@@ -632,7 +613,7 @@ export function GameProvider({ children }) {
         setJustFinished(false)
         setScreen('COMIC_INTRO')
       } catch (err) {
-        setAuthError(err.message || 'Não foi possível validar o código. Tente novamente.')
+        setAuthError(err.message || 'Não foi possível concluir seu cadastro. Tente novamente.')
         throw err
       } finally {
         lockRef.current = false
@@ -641,36 +622,6 @@ export function GameProvider({ children }) {
     },
     [carregarDesafiosAutenticado, clearAllTimeouts, resetCrossTalkHistory]
   )
-
-  const resendVerificationCode = useCallback(async (email) => {
-    setAuthError('')
-    try {
-      return await apiService.reenviarCodigoCadastro({ email })
-    } catch (err) {
-      setAuthError(err.message || 'Não foi possível reenviar o código agora.')
-      throw err
-    }
-  }, [])
-
-  const requestPasswordReset = useCallback(async (email) => {
-    setAuthError('')
-    try {
-      return await apiService.esqueciSenha({ email })
-    } catch (err) {
-      setAuthError(err.message || 'Não foi possível solicitar a recuperação de senha.')
-      throw err
-    }
-  }, [])
-
-  const confirmPasswordReset = useCallback(async ({ email, codigo, novaSenha }) => {
-    setAuthError('')
-    try {
-      return await apiService.redefinirSenha({ email, codigo, novaSenha })
-    } catch (err) {
-      setAuthError(err.message || 'Não foi possível redefinir sua senha.')
-      throw err
-    }
-  }, [])
 
   // 1B. Iniciar ou Retomar jogo através do LOGIN
   const loginAndStart = useCallback(
@@ -1603,11 +1554,7 @@ export function GameProvider({ children }) {
       confirmIntroMazeAndStart,
       openManualMazeModal,
       closeMazeModal,
-      registerAccount,
-      verifyEmailAndStartGame,
-      resendVerificationCode,
-      requestPasswordReset,
-      confirmPasswordReset,
+      registerAndStart,
       loginAndStart,
       advanceFromComic,
       finishArrivalTransition,
@@ -1667,11 +1614,7 @@ export function GameProvider({ children }) {
       confirmIntroMazeAndStart,
       openManualMazeModal,
       closeMazeModal,
-      registerAccount,
-      verifyEmailAndStartGame,
-      resendVerificationCode,
-      requestPasswordReset,
-      confirmPasswordReset,
+      registerAndStart,
       loginAndStart,
       advanceFromComic,
       finishArrivalTransition,
