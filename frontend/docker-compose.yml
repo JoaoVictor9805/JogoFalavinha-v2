@@ -3,7 +3,7 @@
 # As requisições para /api/ são encaminhadas internamente pelo Nginx para BACKEND_URL.
 services:
   frontend:
-    image: jogofalavinha-v2-frontend:${IMAGE_TAG:-prod}
+    image: jogofalavinha-v2-frontend:${IMAGE_TAG:-homol}
     build:
       context: .
       dockerfile: Dockerfile

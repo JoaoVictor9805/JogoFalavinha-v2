@@ -10,7 +10,7 @@
 # pela rede interna do Coolify (BACKEND_URL do frontend apontando para este serviço na porta 3000).
 services:
   backend:
-    image: jogofalavinha-v2-backend:${IMAGE_TAG:-prod}
+    image: jogofalavinha-v2-backend:${IMAGE_TAG:-homol}
     build:
       context: .
       dockerfile: Dockerfile
