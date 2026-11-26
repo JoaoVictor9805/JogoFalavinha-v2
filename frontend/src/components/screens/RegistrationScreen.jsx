@@ -1,12 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertCircle,
+  ArrowLeft,
   Building2,
+  CheckCircle2,
   Key,
   Loader2,
   LogIn,
   Mail,
   Play,
+  RefreshCw,
+  ShieldCheck,
   User,
   Users,
 } from 'lucide-react'
@@ -14,8 +18,10 @@ import { useGame } from '../../context/gameContextInstance'
 import { DEPARTMENTS_LIST, UNITS_LIST } from '../../data/conselhoNextData'
 
 const CORPORATE_EMAIL_REGEX = /^[a-z0-9._%+-]+@falavinha\.com\.br$/i
+const OTP_CODE_REGEX = /^\d{6}$/
 const MIN_PASSWORD_LENGTH = 8
 const MAX_PASSWORD_LENGTH = 72
+const DEFAULT_RESEND_COOLDOWN_SECONDS = 60
 
 function validarNovaSenha(senha, confirmarSenha) {
   if (typeof senha !== 'string' || senha.trim().length < MIN_PASSWORD_LENGTH) {
@@ -33,7 +39,11 @@ function validarNovaSenha(senha, confirmarSenha) {
 function RegistrationScreen() {
   const {
     player,
-    registerAndStart,
+    registerAccount,
+    verifyEmailAndStartGame,
+    resendVerificationCode,
+    requestPasswordReset,
+    confirmPasswordReset,
     loginAndStart,
     isLocked,
     authError,
@@ -41,9 +51,15 @@ function RegistrationScreen() {
   } = useGame()
 
   // activeTab: 'cadastro' | 'login'
+  // viewMode: 'form' | 'verify_email' | 'forgot_request' | 'forgot_reset'
   const [activeTab, setActiveTab] = useState('cadastro')
+  const [viewMode, setViewMode] = useState('form')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isResending, setIsResending] = useState(false)
   const [localError, setLocalError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+  const [needsVerificationEmail, setNeedsVerificationEmail] = useState('')
+  const [resendCooldown, setResendCooldown] = useState(0)
 
   // Formulário de Cadastro
   const [registerForm, setRegisterForm] = useState({
@@ -56,21 +72,43 @@ function RegistrationScreen() {
     setor: player?.setor || DEPARTMENTS_LIST[0],
   })
 
+  // Verificação de e-mail do cadastro
+  const [verifyEmail, setVerifyEmail] = useState('')
+  const [verifyCode, setVerifyCode] = useState('')
+
   // Formulário de Login
   const [loginForm, setLoginForm] = useState({
     email: player?.email || '',
     senha: '',
   })
 
+  // Recuperação de senha
+  const [forgotForm, setForgotForm] = useState({
+    email: player?.email || '',
+    codigo: '',
+    novaSenha: '',
+    confirmarNovaSenha: '',
+  })
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return undefined
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 1 ? prev - 1 : 0))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [resendCooldown])
+
   const clearFeedback = () => {
     setLocalError('')
+    setSuccessMessage('')
+    setNeedsVerificationEmail('')
     clearAuthError?.()
   }
 
   const handleRegisterChange = (e) => {
     const { name, value } = e.target
     setRegisterForm((prev) => ({ ...prev, [name]: value }))
-    if (localError || authError) {
+    if (localError || authError || successMessage) {
       clearFeedback()
     }
   }
@@ -78,13 +116,24 @@ function RegistrationScreen() {
   const handleLoginChange = (e) => {
     const { name, value } = e.target
     setLoginForm((prev) => ({ ...prev, [name]: value }))
-    if (localError || authError) {
+    if (localError || authError || successMessage || needsVerificationEmail) {
+      clearFeedback()
+    }
+  }
+
+  const handleForgotChange = (e) => {
+    const { name, value } = e.target
+    const nextValue = name === 'codigo' ? value.replace(/\D/g, '').slice(0, 6) : value
+    setForgotForm((prev) => ({ ...prev, [name]: nextValue }))
+    if (localError || authError || successMessage) {
       clearFeedback()
     }
   }
 
   const handleTabSwitch = (tab) => {
     setActiveTab(tab)
+    setViewMode('form')
+    setVerifyCode('')
     clearFeedback()
   }
 
@@ -111,11 +160,66 @@ function RegistrationScreen() {
     try {
       setIsSubmitting(true)
       clearFeedback()
-      await registerAndStart(registerForm)
+      const res = await registerAccount(registerForm)
+      const emailNormalizado = res?.email || registerForm.email.trim().toLowerCase()
+      setVerifyEmail(emailNormalizado)
+      setVerifyCode('')
+      setResendCooldown(res?.cooldownReenvioSegundos || DEFAULT_RESEND_COOLDOWN_SECONDS)
+      setSuccessMessage(
+        res?.mensagem || 'Enviamos um código de 6 dígitos para o seu e-mail corporativo.'
+      )
+      setViewMode('verify_email')
     } catch (err) {
+      if (err?.status === 429 && err?.data?.segundosRestantes) {
+        setVerifyEmail(registerForm.email.trim().toLowerCase())
+        setResendCooldown(Number(err.data.segundosRestantes) || DEFAULT_RESEND_COOLDOWN_SECONDS)
+      }
       setLocalError(err.message || 'Erro ao realizar cadastro.')
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleVerifyEmailSubmit = async (e) => {
+    e.preventDefault()
+    if (isLocked || isSubmitting) return
+
+    const codigoLimpo = verifyCode.trim()
+    if (!OTP_CODE_REGEX.test(codigoLimpo)) {
+      setLocalError('Informe o código numérico de 6 dígitos enviado para seu e-mail.')
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+      clearFeedback()
+      await verifyEmailAndStartGame({
+        email: verifyEmail,
+        codigo: codigoLimpo,
+      })
+    } catch (err) {
+      setLocalError(err.message || 'Código inválido ou expirado.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleResendRegisterCode = async () => {
+    if (isResending || isSubmitting || resendCooldown > 0 || !verifyEmail) return
+
+    try {
+      setIsResending(true)
+      clearFeedback()
+      const res = await resendVerificationCode(verifyEmail)
+      setResendCooldown(res?.cooldownReenvioSegundos || DEFAULT_RESEND_COOLDOWN_SECONDS)
+      setSuccessMessage(res?.mensagem || 'Enviamos um novo código para o seu e-mail.')
+    } catch (err) {
+      if (err?.status === 429 && err?.data?.segundosRestantes) {
+        setResendCooldown(Number(err.data.segundosRestantes) || DEFAULT_RESEND_COOLDOWN_SECONDS)
+      }
+      setLocalError(err.message || 'Não foi possível reenviar o código.')
+    } finally {
+      setIsResending(false)
     }
   }
 
@@ -139,6 +243,139 @@ function RegistrationScreen() {
       await loginAndStart(loginForm)
     } catch (err) {
       setLocalError(err.message || 'Erro ao realizar login.')
+      if (err?.data?.codigoErro === 'EMAIL_NAO_VERIFICADO') {
+        setNeedsVerificationEmail(loginForm.email.trim().toLowerCase())
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleOpenVerifyFromLogin = async () => {
+    if (!needsVerificationEmail || isResending) return
+    const targetEmail = needsVerificationEmail
+    setActiveTab('cadastro')
+    setVerifyEmail(targetEmail)
+    setVerifyCode('')
+    setViewMode('verify_email')
+    clearFeedback()
+
+    try {
+      setIsResending(true)
+      const res = await resendVerificationCode(targetEmail)
+      setResendCooldown(res?.cooldownReenvioSegundos || DEFAULT_RESEND_COOLDOWN_SECONDS)
+      setSuccessMessage('Enviamos um novo código de 6 dígitos para o seu e-mail.')
+    } catch (err) {
+      if (err?.status === 429 && err?.data?.segundosRestantes) {
+        setResendCooldown(Number(err.data.segundosRestantes) || DEFAULT_RESEND_COOLDOWN_SECONDS)
+        setSuccessMessage('Digite o código enviado recentemente para o seu e-mail.')
+      } else {
+        setLocalError(err.message || 'Não foi possível reenviar o código.')
+      }
+    } finally {
+      setIsResending(false)
+    }
+  }
+
+  const handleOpenForgotPassword = () => {
+    clearFeedback()
+    setActiveTab('login')
+    setForgotForm((prev) => ({
+      ...prev,
+      email: CORPORATE_EMAIL_REGEX.test(loginForm.email.trim())
+        ? loginForm.email.trim().toLowerCase()
+        : prev.email,
+      codigo: '',
+      novaSenha: '',
+      confirmarNovaSenha: '',
+    }))
+    setViewMode('forgot_request')
+  }
+
+  const handleForgotRequestSubmit = async (e) => {
+    e.preventDefault()
+    if (isLocked || isSubmitting) return
+
+    if (!CORPORATE_EMAIL_REGEX.test(forgotForm.email.trim())) {
+      setLocalError('Informe um e-mail corporativo válido (@falavinha.com.br).')
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+      clearFeedback()
+      const emailLimpo = forgotForm.email.trim().toLowerCase()
+      const res = await requestPasswordReset(emailLimpo)
+      setForgotForm((prev) => ({ ...prev, email: emailLimpo, codigo: '' }))
+      setResendCooldown(res?.cooldownReenvioSegundos || DEFAULT_RESEND_COOLDOWN_SECONDS)
+      setSuccessMessage(
+        res?.mensagem ||
+          'Se este e-mail estiver cadastrado e verificado, enviaremos um código de recuperação.'
+      )
+      setViewMode('forgot_reset')
+    } catch (err) {
+      setLocalError(err.message || 'Erro ao solicitar código de recuperação.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleResendForgotCode = async () => {
+    if (isResending || isSubmitting || resendCooldown > 0 || !forgotForm.email) return
+
+    try {
+      setIsResending(true)
+      clearFeedback()
+      const res = await requestPasswordReset(forgotForm.email)
+      setResendCooldown(res?.cooldownReenvioSegundos || DEFAULT_RESEND_COOLDOWN_SECONDS)
+      setSuccessMessage('Se o e-mail estiver verificado, um novo código foi enviado.')
+    } catch (err) {
+      setLocalError(err.message || 'Não foi possível reenviar o código agora.')
+    } finally {
+      setIsResending(false)
+    }
+  }
+
+  const handleForgotResetSubmit = async (e) => {
+    e.preventDefault()
+    if (isLocked || isSubmitting) return
+
+    if (!OTP_CODE_REGEX.test(forgotForm.codigo.trim())) {
+      setLocalError('Informe o código numérico de 6 dígitos enviado para seu e-mail.')
+      return
+    }
+
+    const senhaErro = validarNovaSenha(forgotForm.novaSenha, forgotForm.confirmarNovaSenha)
+    if (senhaErro) {
+      setLocalError(senhaErro)
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+      clearFeedback()
+      const res = await confirmPasswordReset({
+        email: forgotForm.email,
+        codigo: forgotForm.codigo.trim(),
+        novaSenha: forgotForm.novaSenha,
+      })
+      setLoginForm({
+        email: forgotForm.email,
+        senha: '',
+      })
+      setForgotForm((prev) => ({
+        ...prev,
+        codigo: '',
+        novaSenha: '',
+        confirmarNovaSenha: '',
+      }))
+      setActiveTab('login')
+      setViewMode('form')
+      setSuccessMessage(
+        res?.mensagem || 'Senha redefinida com sucesso! Faça login com sua nova senha.'
+      )
+    } catch (err) {
+      setLocalError(err.message || 'Não foi possível redefinir a senha.')
     } finally {
       setIsSubmitting(false)
     }
@@ -147,12 +384,24 @@ function RegistrationScreen() {
   const errorMessage = localError || authError
 
   const headerTitle =
-    activeTab === 'cadastro' ? 'Credenciamento Oficial' : 'Acesso ao Desafio'
+    viewMode === 'verify_email'
+      ? 'Confirmar E-mail'
+      : viewMode === 'forgot_request' || viewMode === 'forgot_reset'
+        ? 'Recuperar Senha'
+        : activeTab === 'cadastro'
+          ? 'Credenciamento Oficial'
+          : 'Acesso ao Desafio'
 
   const headerSubtitle =
-    activeTab === 'cadastro'
-      ? 'Cadastre seus dados para registrar sua pontuação no ranking.'
-      : 'Entre com seus dados cadastrados para iniciar ou retomar sua partida.'
+    viewMode === 'verify_email'
+      ? 'Digite o código de 6 dígitos enviado para o seu e-mail corporativo.'
+      : viewMode === 'forgot_request'
+        ? 'Informe seu e-mail @falavinha.com.br para receber um código de recuperação.'
+        : viewMode === 'forgot_reset'
+          ? 'Digite o código recebido no e-mail e defina sua nova senha.'
+          : activeTab === 'cadastro'
+            ? 'Cadastre seus dados para registrar sua pontuação no ranking.'
+            : 'Entre com seus dados cadastrados para iniciar ou retomar sua partida.'
 
   return (
     <div className="min-h-screen w-full bg-[#F5F0E6] text-stone-900 flex items-center justify-center p-4 sm:p-8">
@@ -194,6 +443,14 @@ function RegistrationScreen() {
           </button>
         </div>
 
+        {/* Alerta de Sucesso */}
+        {successMessage && (
+          <div className="mb-5 p-3.5 bg-emerald-50 border-2 border-emerald-700 flex items-start gap-2.5 text-emerald-900 text-xs sm:text-sm font-semibold">
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
         {/* Alerta de Erro */}
         {errorMessage && (
           <div className="mb-5 p-3.5 bg-red-50 border-2 border-red-600 text-red-800 text-xs sm:text-sm font-semibold animate-shake">
@@ -201,11 +458,22 @@ function RegistrationScreen() {
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
               <span>{errorMessage}</span>
             </div>
+            {needsVerificationEmail && (
+              <button
+                type="button"
+                onClick={handleOpenVerifyFromLogin}
+                disabled={isResending}
+                className="mt-2.5 inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.12em] text-red-900 underline underline-offset-4 hover:text-stone-900 cursor-pointer"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Confirmar código de verificação</span>
+              </button>
+            )}
           </div>
         )}
 
         {/* FORMULÁRIO DE CADASTRO */}
-        {activeTab === 'cadastro' && (
+        {activeTab === 'cadastro' && viewMode === 'form' && (
           <form onSubmit={handleRegisterSubmit} className="space-y-4">
             <div>
               <label
@@ -402,12 +670,12 @@ function RegistrationScreen() {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Cadastrando...</span>
+                    <span>Enviando código...</span>
                   </>
                 ) : (
                   <>
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>Cadastrar e Iniciar</span>
+                    <Mail className="w-4 h-4" />
+                    <span>Enviar Código e Continuar</span>
                   </>
                 )}
               </button>
@@ -415,8 +683,103 @@ function RegistrationScreen() {
           </form>
         )}
 
+        {/* ETAPA DE CONFIRMAÇÃO DE E-MAIL DO CADASTRO */}
+        {activeTab === 'cadastro' && viewMode === 'verify_email' && (
+          <form onSubmit={handleVerifyEmailSubmit} className="space-y-4">
+            <div className="p-3.5 bg-[#F5F0E6] border-2 border-stone-900 text-xs text-stone-700 font-semibold">
+              Código enviado para:{' '}
+              <span className="font-black text-stone-900 break-all">{verifyEmail}</span>
+              <div className="text-[11px] text-stone-500 mt-1">
+                Válido por 15 minutos. Confira também a caixa de spam/lixo eletrônico.
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="codigo-verificacao"
+                className="block text-[11px] font-black uppercase tracking-[0.16em] text-stone-800 mb-1.5"
+              >
+                Código de 6 Dígitos *
+              </label>
+              <div className="relative group">
+                <ShieldCheck className="w-4 h-4 text-stone-400 group-focus-within:text-[#B87D1E] absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors" />
+                <input
+                  id="codigo-verificacao"
+                  name="codigo"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  required
+                  maxLength={6}
+                  placeholder="000000"
+                  value={verifyCode}
+                  onChange={(e) => {
+                    setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 6))
+                    if (localError || authError) {
+                      setLocalError('')
+                      clearAuthError?.()
+                    }
+                  }}
+                  disabled={isLocked || isSubmitting}
+                  className="w-full pl-10 pr-4 py-3 rounded-none bg-white border-2 border-stone-300 text-stone-900 placeholder-stone-400 text-lg font-black tracking-[0.4em] text-center font-mono focus:outline-none focus:border-[#D99B38] transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="pt-1">
+              <button
+                type="submit"
+                disabled={isLocked || isSubmitting}
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-none bg-[#D99B38] hover:bg-[#c58927] text-stone-950 border-2 border-stone-900 font-black text-xs sm:text-sm uppercase tracking-[0.2em] shadow-[4px_4px_0px_#1C1917] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_#1C1917] active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none transition-all duration-200 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Validando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-current" />
+                    <span>Verificar e Iniciar</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-stone-200">
+              <button
+                type="button"
+                onClick={handleResendRegisterCode}
+                disabled={isResending || isSubmitting || resendCooldown > 0}
+                className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.12em] text-[#B87D1E] hover:text-stone-900 disabled:text-stone-400 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isResending ? 'animate-spin' : ''}`} />
+                <span>
+                  {resendCooldown > 0
+                    ? `Reenviar em ${resendCooldown}s`
+                    : 'Reenviar código'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('form')
+                  setVerifyCode('')
+                  clearFeedback()
+                }}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-stone-600 hover:text-stone-900 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Voltar / Editar dados</span>
+              </button>
+            </div>
+          </form>
+        )}
+
         {/* FORMULÁRIO DE LOGIN */}
-        {activeTab === 'login' && (
+        {activeTab === 'login' && viewMode === 'form' && (
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
               <label
@@ -442,12 +805,22 @@ function RegistrationScreen() {
             </div>
 
             <div>
-              <label
-                htmlFor="login-senha"
-                className="block text-[11px] font-black uppercase tracking-[0.16em] text-stone-800 mb-1.5"
-              >
-                Senha *
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label
+                  htmlFor="login-senha"
+                  className="block text-[11px] font-black uppercase tracking-[0.16em] text-stone-800"
+                >
+                  Senha *
+                </label>
+                <button
+                  type="button"
+                  onClick={handleOpenForgotPassword}
+                  disabled={isLocked || isSubmitting}
+                  className="text-[11px] font-black uppercase tracking-[0.1em] text-[#B87D1E] hover:text-stone-900 underline underline-offset-4 cursor-pointer"
+                >
+                  Esqueceu sua senha?
+                </button>
+              </div>
               <div className="relative group">
                 <Key className="w-4 h-4 text-stone-400 group-focus-within:text-[#B87D1E] absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors" />
                 <input
@@ -482,6 +855,206 @@ function RegistrationScreen() {
                     <span>Entrar no Desafio</span>
                   </>
                 )}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* RECUPERAÇÃO DE SENHA — PASSO 1 (SOLICITAR CÓDIGO) */}
+        {activeTab === 'login' && viewMode === 'forgot_request' && (
+          <form onSubmit={handleForgotRequestSubmit} className="space-y-4">
+            <div>
+              <label
+                htmlFor="forgot-email"
+                className="block text-[11px] font-black uppercase tracking-[0.16em] text-stone-800 mb-1.5"
+              >
+                E-mail Corporativo Cadastrado *
+              </label>
+              <div className="relative group">
+                <Mail className="w-4 h-4 text-stone-400 group-focus-within:text-[#B87D1E] absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors" />
+                <input
+                  id="forgot-email"
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="seu.nome@falavinha.com.br"
+                  value={forgotForm.email}
+                  onChange={handleForgotChange}
+                  disabled={isLocked || isSubmitting}
+                  className="w-full pl-10 pr-4 py-3 rounded-none bg-white border-2 border-stone-300 text-stone-900 placeholder-stone-400 text-sm font-semibold focus:outline-none focus:border-[#D99B38] transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="pt-1">
+              <button
+                type="submit"
+                disabled={isLocked || isSubmitting}
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-none bg-[#D99B38] hover:bg-[#c58927] text-stone-950 border-2 border-stone-900 font-black text-xs sm:text-sm uppercase tracking-[0.2em] shadow-[4px_4px_0px_#1C1917] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_#1C1917] active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none transition-all duration-200 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Enviando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-4 h-4" />
+                    <span>Enviar Código de Recuperação</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="pt-2 border-t border-stone-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('form')
+                  clearFeedback()
+                }}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-stone-600 hover:text-stone-900 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Voltar para o login</span>
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* RECUPERAÇÃO DE SENHA — PASSO 2 (CÓDIGO + NOVA SENHA) */}
+        {activeTab === 'login' && viewMode === 'forgot_reset' && (
+          <form onSubmit={handleForgotResetSubmit} className="space-y-4">
+            <div className="p-3.5 bg-[#F5F0E6] border-2 border-stone-900 text-xs text-stone-700 font-semibold">
+              Recuperando acesso para:{' '}
+              <span className="font-black text-stone-900 break-all">{forgotForm.email}</span>
+            </div>
+
+            <div>
+              <label
+                htmlFor="forgot-codigo"
+                className="block text-[11px] font-black uppercase tracking-[0.16em] text-stone-800 mb-1.5"
+              >
+                Código de 6 Dígitos *
+              </label>
+              <div className="relative group">
+                <ShieldCheck className="w-4 h-4 text-stone-400 group-focus-within:text-[#B87D1E] absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors" />
+                <input
+                  id="forgot-codigo"
+                  name="codigo"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  required
+                  maxLength={6}
+                  placeholder="000000"
+                  value={forgotForm.codigo}
+                  onChange={handleForgotChange}
+                  disabled={isLocked || isSubmitting}
+                  className="w-full pl-10 pr-4 py-3 rounded-none bg-white border-2 border-stone-300 text-stone-900 placeholder-stone-400 text-lg font-black tracking-[0.4em] text-center font-mono focus:outline-none focus:border-[#D99B38] transition-colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="forgot-nova-senha"
+                className="block text-[11px] font-black uppercase tracking-[0.16em] text-stone-800 mb-1.5"
+              >
+                Nova Senha *
+              </label>
+              <div className="relative group">
+                <Key className="w-4 h-4 text-stone-400 group-focus-within:text-[#B87D1E] absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors" />
+                <input
+                  id="forgot-nova-senha"
+                  name="novaSenha"
+                  type="password"
+                  required
+                  minLength={MIN_PASSWORD_LENGTH}
+                  maxLength={MAX_PASSWORD_LENGTH}
+                  autoComplete="new-password"
+                  placeholder="Mínimo 8 caracteres"
+                  value={forgotForm.novaSenha}
+                  onChange={handleForgotChange}
+                  disabled={isLocked || isSubmitting}
+                  className="w-full pl-10 pr-4 py-3 rounded-none bg-white border-2 border-stone-300 text-stone-900 placeholder-stone-400 text-sm font-semibold focus:outline-none focus:border-[#D99B38] transition-colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="forgot-confirmar-senha"
+                className="block text-[11px] font-black uppercase tracking-[0.16em] text-stone-800 mb-1.5"
+              >
+                Confirmar Nova Senha *
+              </label>
+              <div className="relative group">
+                <Key className="w-4 h-4 text-stone-400 group-focus-within:text-[#B87D1E] absolute left-3.5 top-1/2 -translate-y-1/2 transition-colors" />
+                <input
+                  id="forgot-confirmar-senha"
+                  name="confirmarNovaSenha"
+                  type="password"
+                  required
+                  minLength={MIN_PASSWORD_LENGTH}
+                  maxLength={MAX_PASSWORD_LENGTH}
+                  autoComplete="new-password"
+                  placeholder="Digite a nova senha novamente"
+                  value={forgotForm.confirmarNovaSenha}
+                  onChange={handleForgotChange}
+                  disabled={isLocked || isSubmitting}
+                  className="w-full pl-10 pr-4 py-3 rounded-none bg-white border-2 border-stone-300 text-stone-900 placeholder-stone-400 text-sm font-semibold focus:outline-none focus:border-[#D99B38] transition-colors"
+                />
+              </div>
+            </div>
+
+            <div className="pt-1">
+              <button
+                type="submit"
+                disabled={isLocked || isSubmitting}
+                className="w-full flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-none bg-[#D99B38] hover:bg-[#c58927] text-stone-950 border-2 border-stone-900 font-black text-xs sm:text-sm uppercase tracking-[0.2em] shadow-[4px_4px_0px_#1C1917] hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_#1C1917] active:scale-[0.99] disabled:opacity-50 disabled:pointer-events-none transition-all duration-200 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Redefinindo...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Redefinir Senha</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-stone-200">
+              <button
+                type="button"
+                onClick={handleResendForgotCode}
+                disabled={isResending || isSubmitting || resendCooldown > 0}
+                className="inline-flex items-center gap-1.5 text-xs font-black uppercase tracking-[0.12em] text-[#B87D1E] hover:text-stone-900 disabled:text-stone-400 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isResending ? 'animate-spin' : ''}`} />
+                <span>
+                  {resendCooldown > 0
+                    ? `Reenviar em ${resendCooldown}s`
+                    : 'Reenviar código'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('form')
+                  clearFeedback()
+                }}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-stone-600 hover:text-stone-900 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Voltar para o login</span>
               </button>
             </div>
           </form>

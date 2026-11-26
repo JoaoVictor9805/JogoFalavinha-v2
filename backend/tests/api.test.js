@@ -19,10 +19,26 @@ import {
   gerarMensagemAprovacao,
   selecionarMensagemAprovacao,
 } from '../src/utils/dialogosConselho.js'
+import {
+  resetMailTransporterForTests,
+  setMailTransporterForTests,
+} from '../src/utils/mailer.js'
 import { maskEmail } from '../src/utils/securityLogger.js'
 
 const RUN_TAG = `autotest.${Date.now()}`
 const createdEmails = []
+const sentEmails = []
+
+function getLastOtpForEmail(email) {
+  const target = String(email || '').trim().toLowerCase()
+  for (let i = sentEmails.length - 1; i >= 0; i -= 1) {
+    if (String(sentEmails[i].to || '').trim().toLowerCase() === target) {
+      const match = /\b(\d{6})\b/.exec(sentEmails[i].text || '')
+      if (match) return match[1]
+    }
+  }
+  return null
+}
 
 const CSRF_HEADERS = {
   'X-Requested-With': 'fetch',
@@ -55,10 +71,30 @@ async function registerPlayer({
     headers: jsonHeaders(),
     body: JSON.stringify({ nome, email, senha, unidade, setor, genero }),
   })
-  const setCookie = res.headers.get('set-cookie')
-  const cookie = setCookie ? setCookie.split(';')[0] : null
   const data = await res.json()
-  return { res, data, cookie, setCookie }
+  if (res.status !== 200 && res.status !== 201) {
+    return { res, data, cookie: null, setCookie: null, registerRes: res, registerData: data }
+  }
+
+  const codigo = getLastOtpForEmail(email)
+  assert.ok(codigo, `Código OTP deveria ter sido enviado para ${email}`)
+
+  const verifyRes = await fetch(`${baseUrl}/auth/verificar-email`, {
+    method: 'POST',
+    headers: jsonHeaders(),
+    body: JSON.stringify({ email, codigo }),
+  })
+  const setCookie = verifyRes.headers.get('set-cookie')
+  const cookie = setCookie ? setCookie.split(';')[0] : null
+  const verifyData = await verifyRes.json()
+  return {
+    res: verifyRes,
+    data: verifyData,
+    cookie,
+    setCookie,
+    registerRes: res,
+    registerData: data,
+  }
 }
 
 let server
@@ -66,6 +102,13 @@ let baseUrl
 
 describe('Escape Room Falavinha v2 — API, Regras de Negócio & Segurança', () => {
   before(async () => {
+    setMailTransporterForTests({
+      async sendMail(mail) {
+        sentEmails.push(mail)
+        return { messageId: `test-${sentEmails.length}` }
+      },
+    })
+
     const app = createApp()
     await new Promise((resolve) => {
       server = app.listen(0, '127.0.0.1', resolve)
@@ -78,6 +121,7 @@ describe('Escape Room Falavinha v2 — API, Regras de Negócio & Segurança', ()
   })
 
   after(async () => {
+    resetMailTransporterForTests()
     if (server) {
       await new Promise((resolve) => server.close(resolve))
     }
@@ -173,7 +217,10 @@ describe('Escape Room Falavinha v2 — API, Regras de Negócio & Segurança', ()
       email: validEmail,
       senha: 'SenhaForte123',
     })
-    assert.equal(ok.res.status, 201)
+    assert.equal(ok.registerRes.status, 201)
+    assert.equal(ok.registerRes.headers.get('set-cookie'), null)
+    assert.equal(ok.registerData.requerVerificacao, true)
+    assert.equal(ok.res.status, 200)
     assert.ok(ok.setCookie?.toLowerCase().includes('httponly'))
     assert.ok(ok.setCookie?.toLowerCase().includes('samesite=strict'))
 
@@ -788,21 +835,192 @@ describe('Escape Room Falavinha v2 — API, Regras de Negócio & Segurança', ()
     assert.equal(colegaRes.status, 200)
   })
 
-  test('Rotas de verificação de e-mail e recuperação de senha estão desativadas (404) em homologação', async () => {
-    const removedRoutes = [
-      '/auth/verificar-email',
-      '/auth/reenviar-codigo-cadastro',
-      '/auth/esqueci-senha',
-      '/auth/redefinir-senha',
-    ]
+  test('Verificação de e-mail no cadastro: bloqueia login antes de validar, aplica cooldown/5 tentativas e permite sobrescrever pendente', async () => {
+    const emailPendente = makeTestEmail('otp.pendente')
 
-    for (const route of removedRoutes) {
-      const res = await fetch(`${baseUrl}${route}`, {
+    const cadRes = await fetch(`${baseUrl}/auth/cadastrar`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        nome: 'Pessoa Inicial',
+        email: emailPendente,
+        senha: 'SenhaInicial123',
+        unidade: 'Bacacheri',
+        setor: 'TI',
+        genero: 'masculino',
+      }),
+    })
+    assert.equal(cadRes.status, 201)
+    const codigo1 = getLastOtpForEmail(emailPendente)
+    assert.ok(codigo1)
+
+    // Login antes da verificação -> 403 EMAIL_NAO_VERIFICADO
+    const loginBlocked = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ email: emailPendente, senha: 'SenhaInicial123' }),
+    })
+    assert.equal(loginBlocked.status, 403)
+    const loginBlockedData = await loginBlocked.json()
+    assert.equal(loginBlockedData.codigoErro, 'EMAIL_NAO_VERIFICADO')
+
+    // Reenvio imediato dentro do cooldown de 60s -> 429
+    const resendCooldown = await fetch(`${baseUrl}/auth/reenviar-codigo-cadastro`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ email: emailPendente }),
+    })
+    assert.equal(resendCooldown.status, 429)
+
+    // Simula passagem de 61s no último código para testar sobrescrita de cadastro não verificado e reenvio
+    await prisma.codigoVerificacao.updateMany({
+      where: { email: emailPendente },
+      data: { criadoEm: new Date(Date.now() - 61000) },
+    })
+
+    const overwriteCad = await fetch(`${baseUrl}/auth/cadastrar`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        nome: 'Dono Real',
+        email: emailPendente,
+        senha: 'SenhaReal456',
+        unidade: 'Alphaville',
+        setor: 'Contábil',
+        genero: 'feminino',
+      }),
+    })
+    assert.equal(overwriteCad.status, 200)
+    const codigo2 = getLastOtpForEmail(emailPendente)
+    assert.ok(codigo2)
+
+    // Código antigo não deve funcionar após novo código emitido
+    if (codigo1 !== codigo2) {
+      const oldVerify = await fetch(`${baseUrl}/auth/verificar-email`, {
         method: 'POST',
         headers: jsonHeaders(),
-        body: JSON.stringify({ email: 'teste@falavinha.com.br' }),
+        body: JSON.stringify({ email: emailPendente, codigo: codigo1 }),
       })
-      assert.equal(res.status, 404, `Rota ${route} deveria retornar 404 em homologação`)
+      assert.equal(oldVerify.status, 400)
     }
+
+    // 5 tentativas erradas invalidam o código atual
+    for (let i = 0; i < 5; i += 1) {
+      const wrongCode = codigo2 === '999999' ? '000000' : '999999'
+      const wrongRes = await fetch(`${baseUrl}/auth/verificar-email`, {
+        method: 'POST',
+        headers: jsonHeaders(),
+        body: JSON.stringify({ email: emailPendente, codigo: wrongCode }),
+      })
+      assert.equal(wrongRes.status, 400)
+    }
+
+    // Mesmo o código2 correto agora está invalidado pelas 5 tentativas
+    const exhaustedRes = await fetch(`${baseUrl}/auth/verificar-email`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ email: emailPendente, codigo: codigo2 }),
+    })
+    assert.equal(exhaustedRes.status, 400)
+
+    // Libera cooldown e reenvia código3
+    await prisma.codigoVerificacao.updateMany({
+      where: { email: emailPendente },
+      data: { criadoEm: new Date(Date.now() - 61000) },
+    })
+    const resendOk = await fetch(`${baseUrl}/auth/reenviar-codigo-cadastro`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ email: emailPendente }),
+    })
+    assert.equal(resendOk.status, 200)
+    const codigo3 = getLastOtpForEmail(emailPendente)
+    assert.ok(codigo3)
+
+    const verifyOk = await fetch(`${baseUrl}/auth/verificar-email`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ email: emailPendente, codigo: codigo3 }),
+    })
+    assert.equal(verifyOk.status, 200)
+    const verifyData = await verifyOk.json()
+    assert.equal(verifyData.jogador.nome, 'Dono Real')
+
+    // Reutilizar código já consumido -> 400
+    const reuseRes = await fetch(`${baseUrl}/auth/verificar-email`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ email: emailPendente, codigo: codigo3 }),
+    })
+    assert.equal(reuseRes.status, 400)
+  })
+
+  test('Esqueceu sua senha: anti-enumeração, código único e revogação de sessões ativas (tokenVersion)', async () => {
+    // E-mail inexistente retorna 200 neutro e não envia e-mail
+    const ghostEmail = makeTestEmail('nao.existe')
+    const ghostRes = await fetch(`${baseUrl}/auth/esqueci-senha`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ email: ghostEmail }),
+    })
+    assert.equal(ghostRes.status, 200)
+    assert.equal(getLastOtpForEmail(ghostEmail), null)
+
+    const email = makeTestEmail('reset.fluxo')
+    const user = await registerPlayer({
+      nome: 'Reset User',
+      email,
+      senha: 'SenhaAntiga123',
+    })
+    assert.equal(user.res.status, 200)
+
+    // Sessão antiga funciona antes do reset
+    const meBefore = await fetch(`${baseUrl}/auth/me`, {
+      headers: { Cookie: user.cookie },
+    })
+    assert.equal(meBefore.status, 200)
+
+    const forgotRes = await fetch(`${baseUrl}/auth/esqueci-senha`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ email }),
+    })
+    assert.equal(forgotRes.status, 200)
+
+    const resetCode = getLastOtpForEmail(email)
+    assert.ok(resetCode)
+
+    const resetOk = await fetch(`${baseUrl}/auth/redefinir-senha`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        email,
+        codigo: resetCode,
+        novaSenha: 'NovaSenhaForte789',
+      }),
+    })
+    assert.equal(resetOk.status, 200)
+
+    // Sessão anterior foi revogada automaticamente (tokenVersion incrementado)
+    const meAfter = await fetch(`${baseUrl}/auth/me`, {
+      headers: { Cookie: user.cookie },
+    })
+    assert.equal(meAfter.status, 401)
+
+    // Senha antiga não entra mais
+    const oldLogin = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ email, senha: 'SenhaAntiga123' }),
+    })
+    assert.equal(oldLogin.status, 401)
+
+    // Nova senha entra normalmente
+    const newLogin = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ email, senha: 'NovaSenhaForte789' }),
+    })
+    assert.equal(newLogin.status, 200)
   })
 })

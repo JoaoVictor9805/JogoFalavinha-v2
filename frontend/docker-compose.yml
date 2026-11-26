@@ -1,9 +1,9 @@
-# Deploy do frontend (Nginx + React) do JogoFalavinha-v2 no Coolify (homologação / produção).
+# Deploy do frontend (Nginx + React) do JogoFalavinha-v2 no Coolify (produção / homologação).
 # Este serviço recebe o domínio HTTPS público no Coolify apontando para a porta 80.
 # As requisições para /api/ são encaminhadas internamente pelo Nginx para BACKEND_URL.
 services:
   frontend:
-    image: jogofalavinha-v2-frontend:${IMAGE_TAG:-homol}
+    image: jogofalavinha-v2-frontend:${IMAGE_TAG:-prod}
     build:
       context: .
       dockerfile: Dockerfile

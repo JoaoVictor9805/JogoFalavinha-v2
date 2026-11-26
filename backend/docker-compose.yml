@@ -1,4 +1,4 @@
-# Deploy do backend (API) do JogoFalavinha-v2 no Coolify (homologação / produção).
+# Deploy do backend (API) do JogoFalavinha-v2 no Coolify (produção / homologação).
 # Os valores vêm das variáveis de ambiente cadastradas no Coolify:
 #   ${VAR}         = informada no Coolify
 #   ${VAR:-padrão} = opcional, com valor padrão
@@ -10,7 +10,7 @@
 # pela rede interna do Coolify (BACKEND_URL do frontend apontando para este serviço na porta 3000).
 services:
   backend:
-    image: jogofalavinha-v2-backend:${IMAGE_TAG:-homol}
+    image: jogofalavinha-v2-backend:${IMAGE_TAG:-prod}
     build:
       context: .
       dockerfile: Dockerfile
@@ -20,7 +20,7 @@ services:
       - '3000'
     environment:
       NODE_ENV: production
-      # Endereço HTTPS público do frontend (ex.: https://homol-conselhonext.falavinha.com.br).
+      # Endereço HTTPS público do frontend (ex.: https://conselhonext.falavinha.com.br).
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN}
       TRUST_PROXY: ${TRUST_PROXY:-loopback,linklocal,uniquelocal}
       # Segredo JWT (>= 32 caracteres). Validado na inicialização em src/utils/jwt.js.
@@ -28,6 +28,14 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
       # Banco de dados (PostgreSQL do Coolify, URL interna). Migrations e seed rodam ao iniciar.
       DATABASE_URL: ${DATABASE_URL}
+      # Envio de e-mails OTP (SMTP corporativo) e segredo HMAC opcional.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      OTP_SECRET: ${OTP_SECRET:-}
     healthcheck:
       test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s

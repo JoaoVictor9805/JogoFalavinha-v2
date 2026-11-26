@@ -9,22 +9,45 @@ datasource db {
 
 // Colaborador / Jogador cadastrado no sistema
 model Jogador {
-  id           String    @id @default(uuid())
-  nome         String
-  email        String    @unique
-  unidade      String
-  setor        String
-  genero       String    @default("masculino") // "masculino" | "feminino"
-  senha        String?   // Senha com hash bcrypt
-  tokenVersion Int       @default(0) @map("token_version") // Incrementado no logout para revogação real de JWT
-  criadoEm     DateTime  @default(now()) @map("criado_em")
-  atualizadoEm DateTime  @updatedAt @map("atualizado_em")
-  partidas     Partida[]
+  id                String              @id @default(uuid())
+  nome              String
+  email             String              @unique
+  unidade           String
+  setor             String
+  genero            String              @default("masculino") // "masculino" | "feminino"
+  senha             String?             // Senha com hash bcrypt
+  emailVerificado   Boolean             @default(false) @map("email_verificado")
+  emailVerificadoEm DateTime?           @map("email_verificado_em")
+  tokenVersion      Int                 @default(0) @map("token_version") // Incrementado no logout/reset para revogação real de JWT
+  criadoEm          DateTime            @default(now()) @map("criado_em")
+  atualizadoEm      DateTime            @updatedAt @map("atualizado_em")
+  partidas          Partida[]
+  codigos           CodigoVerificacao[]
 
   @@map("jogadores")
   @@index([email])
   @@index([setor])
   @@index([unidade])
+}
+
+// Códigos OTP temporários (hash HMAC-SHA256) para verificação de e-mail e recuperação de senha
+model CodigoVerificacao {
+  id            String    @id @default(uuid())
+  jogadorId     String    @map("jogador_id")
+  jogador       Jogador   @relation(fields: [jogadorId], references: [id], onDelete: Cascade)
+  email         String
+  finalidade    String    // "CADASTRO" | "RECUPERACAO_SENHA"
+  codigoHash    String    @map("codigo_hash")
+  tentativas    Int       @default(0)
+  maxTentativas Int       @default(5) @map("max_tentativas")
+  expiraEm      DateTime  @map("expira_em")
+  consumidoEm   DateTime? @map("consumido_em")
+  criadoEm      DateTime  @default(now()) @map("criado_em")
+
+  @@index([email, finalidade])
+  @@index([jogadorId])
+  @@index([expiraEm])
+  @@map("codigos_verificacao")
 }
 
 // Sessão / Partida do colaborador

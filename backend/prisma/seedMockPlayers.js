@@ -139,6 +139,7 @@ async function run() {
   })
 
   for (const item of MOCK_PLAYERS) {
+    const agora = new Date()
     const jogador = await prisma.jogador.upsert({
       where: { email: item.email },
       update: {
@@ -146,6 +147,8 @@ async function run() {
         unidade: item.unidade,
         setor: item.setor,
         senha: senhaHash,
+        emailVerificado: true,
+        emailVerificadoEm: agora,
       },
       create: {
         nome: item.nome,
@@ -153,6 +156,8 @@ async function run() {
         unidade: item.unidade,
         setor: item.setor,
         senha: senhaHash,
+        emailVerificado: true,
+        emailVerificadoEm: agora,
       },
     })
 
